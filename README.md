@@ -15,7 +15,7 @@ This project is built with Electron and React (Vite). Here's how to get it runni
 
 1.  **Clone the repository:**
     ```
-    git clone [https://github.com/Jtorres160/Matrix_IPTV.git](https://github.com/Jtorres160/Matrix_IPTV.git)
+    git clone https://github.com/Jtorres160/Matrix_IPTV.git
 
     ```
 
