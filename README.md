@@ -1,47 +1,50 @@
 # Matrix_IPTV
-Open source IPTV player for Mac, Linux and Windows
-Matrix_IPTV
 
 Open source IPTV player for Mac, Linux, and Windows.
 
 This project is built with Electron and React (Vite). Here's how to get it running on your local machine for development.
 
-Running Locally
+## Running Locally
 
-What You'll Need
+### What You'll Need
 
-    Git
+* [Git](https://git-scm.com/)
+* [Node.js](https://nodejs.org/) (v18 or newer is recommended)
 
-    Node.js (v18 or newer is recommended)
+### Setup Steps
 
-Setup Steps
+1.  **Clone the repository:**
+    ```
+    git clone [https://github.com/Jtorres160/Matrix_IPTV.git](https://github.com/Jtorres160/Matrix_IPTV.git)
 
-    Clone the repository:
-    Bash
+    ```
 
-git clone https://github.com/Jtorres160/Matrix_IPTV.git
+2.  **Navigate into the project directory:**
+    ```
+    cd Matrix_IPTV
 
-Navigate into the project directory:
-Bash
+    ```
 
-cd Matrix_IPTV
+3.  **Install all the dependencies:**
+    This will download React, Electron, and all other necessary packages.
+    ```
+    npm install
 
-Install all the dependencies: This will download React, Electron, and all other necessary packages.
-Bash
+    ```
 
-npm install
-
-Run the desktop app:
-Bash
-
+4.  **Run the desktop app:**
+    ```
     npm run desktop
+
+    ```
 
 ...and that's it! This one command handles everything. It boots up the Vite development server and launches the Electron application at the same time.
 
-How it Works
+---
 
-The npm run desktop script uses concurrently to run two commands in parallel:
+### How it Works
 
-    npm run dev: Starts the Vite/React app on http://localhost:5173.
+The `npm run desktop` script uses `concurrently` to run two commands in parallel:
 
-    npm run electron: Starts the Electron shell, which is configured to load the app from that localhost URL.
+* **`npm run dev`**: Starts the Vite/React app on `http://localhost:5173`.
+* **`npm run electron`**: Starts the Electron shell, which is configured to load the app from that localhost URL.
