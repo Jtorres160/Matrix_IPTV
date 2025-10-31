@@ -1,6 +1,6 @@
 # Matrix_IPTV
 
-Open source IPTV player for Mac, Linux, and Windows.
+Open source IPTV Player
 
 This project is built with Electron and React (Vite). Here's how to get it running on your local machine for development.
 
