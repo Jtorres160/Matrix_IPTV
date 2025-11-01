@@ -188,4 +188,8 @@ export const useProfilesStore = create(
 )
 
 export const useActiveProfile = () => useProfilesStore((s) => s.getActiveProfile())
+<<<<<<< HEAD
 export const useActiveSettings = () => useProfilesStore((s) => s.getActiveSettings())
+=======
+export const useActiveSettings = () => useProfilesStore((s) => s.getActiveSettings())
+>>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
