@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { nanoid } from 'nanoid' // <-- Import nanoid
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type PlayerPreference = 'internal' | 'vlc'
@@ -46,16 +47,53 @@ const DEFAULT_SETTINGS: ProfileSettings = {
 	autoRefresh: false,
 }
 
-function generateId() {
-	return Math.random().toString(36).slice(2, 10)
-}
+// --- DELETED generateId() ---
 
 const createDefaultProfile = (): UserProfile => ({
-	id: generateId(),
+	id: nanoid(), // <-- Use nanoid
 	name: 'Default',
 	playlists: [],
 	settings: { ...DEFAULT_SETTINGS },
 })
+
+// --- *** THIS IS THE FIX (Part 1) *** ---
+// Re-added the async storage function
+// This uses electronStore if available, otherwise falls back to localStorage
+const getStorage = () => {
+	if (typeof window !== 'undefined' && window.electronStore) {
+		// Use the native file-based storage in Electron
+		return {
+			getItem: async (key: string): Promise<string | null> => {
+				try {
+					const value = await window.electronStore.get(key);
+					// Zustand's persist middleware expects 'null' for a missing key
+					return value === undefined ? null : value;
+				} catch (e) {
+					console.error('[Matrix_IPTV] electronStore.get error:', e);
+					return null;
+				}
+			},
+			setItem: async (key: string, value: string): Promise<void> => {
+				try {
+					await window.electronStore.set(key, value);
+				} catch (e) {
+					console.error('[Matrix_IPTV] electronStore.set error:', e);
+				}
+			},
+			removeItem: async (key: string): Promise<void> => {
+				try {
+					await window.electronStore.delete(key);
+				} catch (e) {
+					console.error('[Matrix_IPTV] electronStore.delete error:', e);
+				}
+			}
+		};
+	}
+	// Fallback to localStorage for web/browser version
+	return localStorage;
+};
+// --- *** END OF FIX *** ---
+
 
 export const useProfilesStore = create<ProfilesState>()(
 	persist(
@@ -75,7 +113,7 @@ export const useProfilesStore = create<ProfilesState>()(
 			},
 
 			createProfile: (name: string) => {
-				const id = generateId()
+				const id = nanoid() // <-- Use nanoid
 				const newProfile: UserProfile = {
 					id,
 					name: name?.trim() || 'New Profile',
@@ -179,9 +217,13 @@ export const useProfilesStore = create<ProfilesState>()(
 		}),
 		{
 			name: 'iptv.profiles.v1',
-			storage: createJSONStorage(() => localStorage),
+			// --- *** THIS IS THE FIX (Part 2) *** ---
+			storage: createJSONStorage(getStorage), // Use our new async storage
 			version: 1,
-			onRehydrateStorage: () => (state) => {
+			// Use onFinishHydration for async storage
+			onFinishHydration: () => {
+			// --- *** END OF FIX *** ---
+				console.log('[Matrix_IPTV] Rehydrating profile store from disk...');
 				// Ensure at least one profile exists after hydration
 				set((s) => {
 					let nextProfiles = s.profiles
@@ -204,5 +246,3 @@ export const useProfilesStore = create<ProfilesState>()(
 // Convenience hooks
 export const useActiveProfile = () => useProfilesStore((s) => s.getActiveProfile())
 export const useActiveSettings = () => useProfilesStore((s) => s.getActiveSettings())
-
-

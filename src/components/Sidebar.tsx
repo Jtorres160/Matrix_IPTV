@@ -1,4 +1,3 @@
-import ProfileSwitcher from './ProfileSwitcher'
 import { useActiveProfile } from '../store/profileStore'
 
 type Props = {
@@ -14,8 +13,8 @@ export default function Sidebar({ className, categories, activeCategory, onSelec
 
 	return (
 		<aside className={`flex h-full w-64 flex-col border-r ${className ?? ''}`}>
+			{/* ProfileSwitcher component removed from here */}
 			<div className="p-3">
-				<ProfileSwitcher />
 				{profile && (
 					<p className="mt-2 text-xs text-muted-foreground">Active: {profile.name}</p>
 				)}
@@ -39,5 +38,3 @@ export default function Sidebar({ className, categories, activeCategory, onSelec
 		</aside>
 	)
 }
-
-

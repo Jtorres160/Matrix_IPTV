@@ -8,10 +8,12 @@
     "electron": "cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron ./electron/main.cjs",
     "desktop": "concurrently -k \"npm:dev\" \"npm:electron\"",
     "build": "vite build",
-    "preview": "vite preview --port 5173"
+    "preview": "vite preview --port 5173",
+    "lint": "eslint . --ext .js,.jsx --fix"
   },
   "dependencies": {
     "electron-store": "^11.0.2",
+    "nanoid": "^5.1.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-player": "^2.16.0",

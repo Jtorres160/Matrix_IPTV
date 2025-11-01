@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
+import { nanoid } from 'nanoid'
 
 const DEFAULT_SETTINGS = {
 	theme: 'dark',
@@ -7,28 +8,45 @@ const DEFAULT_SETTINGS = {
 	autoRefresh: false,
 }
 
-function generateId() {
-	return Math.random().toString(36).slice(2, 10)
-}
-
 function createDefaultProfile() {
 	return {
-		id: generateId(),
+		id: nanoid(),
 		name: 'Default',
 		playlists: [],
 		settings: { ...DEFAULT_SETTINGS },
 	}
 }
 
-// Check if we're in Electron (window.electronStore) or a regular browser
 const getStorage = () => {
-	if (window.electronStore) {
-		// Use the native file-based storage in Electron
-		return window.electronStore
+	if (typeof window !== 'undefined' && window.electronStore) {
+		return {
+			getItem: async (key) => {
+				try {
+					const value = await window.electronStore.get(key);
+					return value === undefined ? null : value;
+				} catch (e) {
+					console.error('[Matrix_IPTV] electronStore.get error:', e);
+					return null;
+				}
+			},
+			setItem: async (key, value) => {
+				try {
+					await window.electronStore.set(key, value);
+				} catch (e) {
+					console.error('[Matrix_IPTV] electronStore.set error:', e);
+				}
+			},
+			removeItem: async (key) => {
+				try {
+					await window.electronStore.delete(key);
+				} catch (e) {
+					console.error('[Matrix_IPTV] electronStore.delete error:', e);
+				}
+			}
+		};
 	}
-	// Fallback to localStorage for web/browser version
-	return localStorage
-}
+	return localStorage;
+};
 
 export const useProfilesStore = create(
 	persist(
@@ -46,7 +64,7 @@ export const useProfilesStore = create(
 			},
 
 			createProfile: (name) => {
-				const id = generateId()
+				const id = nanoid()
 				const newProfile = {
 					id,
 					name: (name || '').trim() || 'New Profile',
@@ -144,9 +162,14 @@ export const useProfilesStore = create(
 		}),
 		 {
 			 name: 'iptv.profiles.v1',
-		 // Use the new dynamic storage getter
-		 storage: createJSONStorage(getStorage),
-			onRehydrateStorage: () => (set, get) => {
+		 	 storage: createJSONStorage(getStorage),
+             // --- *** THIS IS THE FIX *** ---
+             // Changed 'onRehydrateStorage' to 'onFinishHydration'
+             // This function is called AFTER async storage is loaded
+             // and correctly provides the 'set' function.
+			 onFinishHydration: (state, set, get) => {
+             // --- *** END OF FIX *** ---
+                console.log('[Matrix_IPTV] Rehydrating profile store from disk...');
 				// ensure at least one profile
 				set((s) => {
 					let nextProfiles = s.profiles
