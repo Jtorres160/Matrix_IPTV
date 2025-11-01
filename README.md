@@ -1,10 +1,25 @@
 # Matrix_IPTV
 
-Open source IPTV Player
+Open source IPTV Player for Linux, and Windows. (Mac OS soon)
 
-This project is built with Electron and React (Vite). Here's how to get it running on your local machine for development.
+This project is built with **Electron** and **React (Vite)**. It is ready for stable release!
 
-## Running Locally
+---
+
+## 📥 Get the Application (End-Users)
+
+The easiest way to run this application is to download a packaged installer directly from the GitHub Releases page.
+
+1.  Go to the **Releases** tab on this repository.
+2.  Download the appropriate file for your operating system:
+    * **Windows:** `Matrix_IPTV Setup 0.1.0.exe` (Installer)
+    * **Linux:** `Matrix_IPTV-0.1.0.AppImage` (Portable Executable)
+
+---
+
+## 🚀 Running Locally (Developer Setup)
+
+Follow these steps if you want to develop, modify, or debug the application.
 
 ### What You'll Need
 
@@ -14,37 +29,28 @@ This project is built with Electron and React (Vite). Here's how to get it runni
 ### Setup Steps
 
 1.  **Clone the repository:**
-    ```
-    git clone https://github.com/Jtorres160/Matrix_IPTV.git
-
+    ```bash
+    git clone [https://github.com/Jtorres160/Matrix_IPTV.git](https://github.com/Jtorres160/Matrix_IPTV.git)
     ```
 
 2.  **Navigate into the project directory:**
-    ```
+    ```bash
     cd Matrix_IPTV
-
     ```
 
-3.  **Install all the dependencies:**
-    This will download React, Electron, and all other necessary packages.
-    ```
+3.  **Install all dependencies:**
+    ```bash
     npm install
-
     ```
 
 4.  **Run the desktop app:**
-    ```
+    ```bash
     npm run desktop
-
     ```
 
-...and that's it! This one command handles everything. It boots up the Vite development server and launches the Electron application at the same time.
+### ⚙️ Build and Package (Developer Only)
 
----
+To generate the final distributable files (`.exe`, `.AppImage`, `.dmg`):
 
-### How it Works
-
-The `npm run desktop` script uses `concurrently` to run two commands in parallel:
-
-* **`npm run dev`**: Starts the Vite/React app on `http://localhost:5173`.
-* **`npm run electron`**: Starts the Electron shell, which is configured to load the app from that localhost URL.
+```bash
+npm run package
