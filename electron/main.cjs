@@ -1,13 +1,16 @@
-// electron/main.cjs
+// electron/main.cjs - FIXED VERSION
 
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+
 let mainWindow;
 let vlcProcess = null;
 let store;
 
-// --- *** NEW: Helper function to debounce saving *** ---
+// *** FIX: Properly detect development vs production ***
+const isDev = process.env.VITE_DEV_SERVER_URL !== undefined;
+
 function debounce(fn, delay) {
   let timeoutId;
   return function (...args) {
@@ -15,7 +18,6 @@ function debounce(fn, delay) {
     timeoutId = setTimeout(() => fn.apply(this, args), delay);
   };
 }
-// --- *** END OF CHANGE *** ---
 
 async function initStore() {
   const Store = (await import('electron-store')).default;
@@ -23,14 +25,10 @@ async function initStore() {
 }
 
 function createWindow() {
-  // --- *** NEW: Load saved window bounds *** ---
-  const bounds = store.get('windowBounds');
-  // --- *** END OF CHANGE *** ---
+  const bounds = store ? store.get('windowBounds') : null;
 
   mainWindow = new BrowserWindow({
-    // --- *** NEW: Use saved bounds or set defaults *** ---
     ...(bounds || { width: 1400, height: 900 }),
-                                 // --- *** END OF CHANGE *** ---
                                  webPreferences: {
                                    nodeIntegration: false,
                                    contextIsolation: true,
@@ -38,26 +36,35 @@ function createWindow() {
                                  }
   });
 
-  // --- *** NEW: Save bounds on resize, move, or close *** ---
   const saveBounds = () => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    store.set('windowBounds', mainWindow.getBounds());
+    if (store) store.set('windowBounds', mainWindow.getBounds());
   };
 
-  // Debounce move/resize for performance, but save immediately on close
-  const debouncedSaveBounds = debounce(saveBounds, 500);
-  mainWindow.on('resize', debouncedSaveBounds);
-  mainWindow.on('move', debouncedSaveBounds);
-  mainWindow.on('close', saveBounds);
-  // --- *** END OF CHANGE *** ---
+    const debouncedSaveBounds = debounce(saveBounds, 500);
+    mainWindow.on('resize', debouncedSaveBounds);
+    mainWindow.on('move', debouncedSaveBounds);
+    mainWindow.on('close', saveBounds);
 
-  // Load your app
-  if (process.env.VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-    mainWindow.webContents.openDevTools();
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
-  }
+    // *** FIX: Load correct path based on environment ***
+    if (isDev) {
+      console.log('[Matrix_IPTV] Loading DEV from:', process.env.VITE_DEV_SERVER_URL);
+      mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+      mainWindow.webContents.openDevTools();
+    } else {
+      const indexPath = path.join(__dirname, '../dist/index.html');
+      console.log('[Matrix_IPTV] Loading PRODUCTION from:', indexPath);
+      mainWindow.loadFile(indexPath);
+    }
+
+    // *** FIX: Add error logging ***
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      console.error('[Matrix_IPTV] Failed to load:', errorCode, errorDescription);
+    });
+
+    mainWindow.webContents.on('console-message', (event, level, message) => {
+      console.log('[Matrix_IPTV] Renderer:', message);
+    });
 }
 
 // Electron Store IPC Handlers
@@ -65,21 +72,25 @@ ipcMain.handle('store:get', async (event, key) => {
   if (!store) await initStore();
   return store.get(key);
 });
+
 ipcMain.handle('store:set', async (event, key, value) => {
   if (!store) await initStore();
   store.set(key, value);
   return true;
 });
+
 ipcMain.handle('store:delete', async (event, key) => {
   if (!store) await initStore();
   store.delete(key);
   return true;
 });
+
 ipcMain.handle('store:clear', async () => {
   if (!store) await initStore();
   store.clear();
   return true;
 });
+
 // VLC IPC Handlers
 ipcMain.handle('vlc:load', async (event, { url, title, options = [] }) => {
   try {
@@ -101,21 +112,22 @@ ipcMain.handle('vlc:load', async (event, { url, title, options = [] }) => {
     ];
     vlcProcess = spawn(vlcPath, args);
     vlcProcess.on('error', (err) => {
-      console.error('VLC process error:', err);
+      console.error('[Matrix_IPTV] VLC process error:', err);
       if (mainWindow) {
         mainWindow.webContents.send('vlc:error', err.message);
       }
     });
     vlcProcess.on('close', (code) => {
-      console.log(`VLC process exited with code ${code}`);
+      console.log(`[Matrix_IPTV] VLC process exited with code ${code}`);
       vlcProcess = null;
     });
     return { success: true };
   } catch (error) {
-    console.error('Failed to start VLC:', error);
+    console.error('[Matrix_IPTV] Failed to start VLC:', error);
     throw error;
   }
 });
+
 ipcMain.handle('vlc:stop', async () => {
   if (vlcProcess) {
     vlcProcess.kill();
@@ -123,11 +135,12 @@ ipcMain.handle('vlc:stop', async () => {
   }
   return { success: true };
 });
+
 ipcMain.handle('vlc:check', async () => {
   const vlcPath = getVLCPath();
   return { available: !!vlcPath, path: vlcPath };
 });
-// Helper function to find VLC installation
+
 function getVLCPath() {
   const platform = process.platform;
   const fs = require('fs');
@@ -145,7 +158,6 @@ function getVLCPath() {
       '/usr/bin/vlc',
       '/usr/local/bin/vlc',
       '/snap/bin/vlc',
-      '/usr/bin/flatpak run org.videolan.VLC', // Flatpak
     ]
   };
   const paths = possiblePaths[platform] || [];
@@ -164,11 +176,14 @@ function getVLCPath() {
   return null;
 }
 
-// Initialize app
 app.whenReady().then(async () => {
-  await initStore(); // Initialize store before creating window
+  console.log('[Matrix_IPTV] App starting...');
+  console.log('[Matrix_IPTV] Development mode:', isDev);
+  console.log('[Matrix_IPTV] __dirname:', __dirname);
+  await initStore();
   createWindow();
 });
+
 app.on('window-all-closed', () => {
   if (vlcProcess) {
     vlcProcess.kill();
@@ -177,11 +192,13 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
+
 app.on('before-quit', () => {
   if (vlcProcess) {
     vlcProcess.kill();

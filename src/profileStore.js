@@ -162,34 +162,30 @@ export const useProfilesStore = create(
 		}),
 		 {
 			 name: 'iptv.profiles.v1',
-		 	 storage: createJSONStorage(getStorage),
-             // --- *** THIS IS THE FIX *** ---
-             // Changed 'onRehydrateStorage' to 'onFinishHydration'
-             // This function is called AFTER async storage is loaded
-             // and correctly provides the 'set' function.
-			 onFinishHydration: (state, set, get) => {
-             // --- *** END OF FIX *** ---
-                console.log('[Matrix_IPTV] Rehydrating profile store from disk...');
-				// ensure at least one profile
-				set((s) => {
-					let nextProfiles = s.profiles
-					let nextActive = s.activeProfileId
-					if (!nextProfiles || Object.keys(nextProfiles).length === 0) {
-						const def = createDefaultProfile()
-						nextProfiles = { [def.id]: def }
-						nextActive = def.id
-					}
-					if (!nextActive) nextActive = Object.keys(nextProfiles)[0]
-						return { profiles: nextProfiles, activeProfileId: nextActive }
-				})
+		 storage: createJSONStorage(getStorage),
+			onRehydrateStorage: () => (state) => {
+				console.log('[Matrix_IPTV] Rehydrating profile store from disk...');
+				if (!state) return;
+
+				let nextProfiles = state.profiles;
+				let nextActive = state.activeProfileId;
+
+				if (!nextProfiles || Object.keys(nextProfiles).length === 0) {
+					const def = createDefaultProfile();
+					nextProfiles = { [def.id]: def };
+					nextActive = def.id;
+					state.profiles = nextProfiles;
+					state.activeProfileId = nextActive;
+				}
+
+				if (!nextActive) {
+					nextActive = Object.keys(nextProfiles)[0];
+					state.activeProfileId = nextActive;
+				}
 			},
 		 }
 	)
 )
 
 export const useActiveProfile = () => useProfilesStore((s) => s.getActiveProfile())
-<<<<<<< HEAD
 export const useActiveSettings = () => useProfilesStore((s) => s.getActiveSettings())
-=======
-export const useActiveSettings = () => useProfilesStore((s) => s.getActiveSettings())
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b

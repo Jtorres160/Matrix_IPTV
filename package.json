@@ -22,11 +22,9 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.21",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "electron": "^31.3.0",
-<<<<<<< HEAD
     "electron-builder": "^26.0.12",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
@@ -34,10 +32,6 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-react-refresh": "^0.4.8",
     "prettier": "^3.3.3",
-=======
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.16",
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
     "vite": "^5.4.0"
   },
   "build": {
@@ -45,16 +39,18 @@
     "productName": "Matrix_IPTV",
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "package.json"
     ],
     "directories": {
       "output": "release"
     },
+    "linux": {
+      "target": ["AppImage"],
+      "category": "AudioVideo"
+    },
     "win": {
       "target": "nsis"
-    },
-    "linux": {
-      "target": "AppImage"
     },
     "mac": {
       "target": "dmg"

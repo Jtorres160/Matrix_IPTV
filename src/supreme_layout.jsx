@@ -1,98 +1,16 @@
 import React, { useState, useEffect } from "react";
 import ReactPlayer from "react-player";
-<<<<<<< HEAD
-// Importing the NEW modular components/files
-import Sidebar from "./Sidebar.jsx"; // <-- NEW Import
-import SettingsModal from "./SettingsModal.jsx"; // <-- NEW Import
+import Sidebar from "./Sidebar.jsx";
+import SettingsModal from "./SettingsModal.jsx";
 import { useActiveSettings, useActiveProfile, useProfilesStore } from "./profileStore.js";
-import { useSettings } from "./useSettings.js"; // <-- NEW Import
+import { useSettings } from "./useSettings.js";
 
-// --- DELETED: Old internal Sidebar component definition ---
-// --- DELETED: Old internal SettingsModal component definition ---
-// --- DELETED: Old internal PlayerPreview component definition ---
-// --- DELETED: Old internal EPGInfo component definition ---
-// --- DELETED: Old internal PlaylistManager component definition ---
-
-// NOTE: The ChannelList and FilteredChannelList are still defined at the end of this file
-// because they rely on internal component logic (like FilteredChannelList receiving search data).
-
-// --- PlayerPreview Component (Moved to keep logic consistent) ---
-=======
-import ProfileSwitcher from "./ProfileSwitcher.jsx";
-import { useActiveSettings, useActiveProfile, useProfilesStore } from "./profileStore.js";
-
-// --- Sidebar, CategoryList, ChannelList are unchanged ---
-const Sidebar = ({ onNavigate, onOpenSettings }) => (
-  <div className="flex flex-col gap-4 p-4 bg-[#0e2a2d] h-full border-r border-gray-700 text-gray-200 text-sm">
-  <nav className="flex flex-col gap-3">
-  <button className="hover:text-white text-left" onClick={onOpenSettings}>
-  ⚙️ Settings
-  </button>
-  </nav>
-  </div>
-);
-
-const CategoryList = ({ categories = [], activeCategory, onSelectCategory }) => {
-  if (!categories || categories.length === 0) {
-    return (
-      <div className="flex flex-col p-4 bg-[#0c3337] text-gray-100 border-r border-gray-700 overflow-y-auto">
-      <div className="text-sm text-gray-400">No categories. Add an M3U playlist.</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col p-4 bg-[#0c3337] text-gray-100 border-r border-gray-700 overflow-y-auto">
-    {categories.map((cat) => (
-      <button
-      key={cat}
-      onClick={() => onSelectCategory(activeCategory === cat ? null : cat)}
-      className={`text-left p-2 rounded cursor-pointer transition hover:bg-[#1b4c52] ${
-        activeCategory === cat ? 'bg-[#1b4c52]' : ''
-      }`}
-      >
-      {cat}
-      </button>
-    ))}
-    </div>
-  );
-};
-
-const ChannelList = ({ channels = [], onSelect, selectedChannelId }) => {
-  return (
-    <div className="flex flex-col p-4 text-gray-200 text-sm bg-[#0a1f22] flex-1 overflow-y-auto">
-    {channels.length === 0 && (
-      <div className="text-sm text-gray-400">
-      No channels found.
-      </div>
-    )}
-    {channels.map((ch) => (
-      <div
-      key={ch.url || ch.id}
-      onClick={() => onSelect(ch)}
-      className={`flex justify-between items-center border-b border-gray-700 py-2 cursor-pointer hover:bg-[#123234] ${
-        selectedChannelId === ch.id ? 'bg-[#123234]' : ''
-      }`}
-      >
-      <div>
-      <span className="text-red-500 font-bold mr-2">LIVE</span>
-      {ch.name}
-      </div>
-      <span className="text-gray-500">{ch.status}</span>
-      </div>
-    ))}
-    </div>
-  );
-};
-
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
 const PlayerPreview = ({ selectedChannel, playerPreference, darkMode }) => {
   const [playerError, setPlayerError] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [vlcAvailable, setVlcAvailable] = useState(false);
   const vlcCheckDone = React.useRef(false);
 
-<<<<<<< HEAD
   let resolution = null;
   if (selectedChannel) {
     const match = selectedChannel.name.match(/\((\d{3,4}p)\)/i);
@@ -101,8 +19,6 @@ const PlayerPreview = ({ selectedChannel, playerPreference, darkMode }) => {
     }
   }
 
-=======
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
   useEffect(() => {
     if (!vlcCheckDone.current && window.electronVLC) {
       window.electronVLC.check().then(result => {
@@ -183,7 +99,6 @@ const PlayerPreview = ({ selectedChannel, playerPreference, darkMode }) => {
     );
   }
 
-  // Internal ReactPlayer (default)
   return (
     <div className="flex-1 border-b border-gray-700 bg-black relative">
     {!isReady && (
@@ -200,13 +115,7 @@ const PlayerPreview = ({ selectedChannel, playerPreference, darkMode }) => {
     height="100%"
     onReady={() => setIsReady(true)}
     onError={(e) => {
-<<<<<<< HEAD
       console.error('[Matrix_IPTV] ReactPlayer Error:', e, 'for URL:', selectedChannel.url);
-=======
-      // --- *** ADDED CONSOLE LOG *** ---
-      console.error('[Matrix_IPTV] ReactPlayer Error:', e, 'for URL:', selectedChannel.url);
-      // --- *** END OF CHANGE *** ---
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
       setPlayerError(true);
     }}
     />
@@ -229,10 +138,6 @@ const PlayerPreview = ({ selectedChannel, playerPreference, darkMode }) => {
   );
 };
 
-<<<<<<< HEAD
-// --- EPGInfo Component (Moved to keep logic consistent) ---
-=======
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
 const EPGInfo = ({ epgData }) => (
   <div className="p-4 bg-[#0c3337] text-gray-400 text-sm h-[40%] overflow-y-auto">
   {epgData && epgData.length > 0 ? (
@@ -252,8 +157,6 @@ const EPGInfo = ({ epgData }) => (
   </div>
 );
 
-<<<<<<< HEAD
-// --- CategoryList Component (Moved to keep logic consistent) ---
 const CategoryList = ({ categories = [], activeCategory, onSelectCategory }) => {
   if (!categories || categories.length === 0) {
     return (
@@ -276,176 +179,34 @@ const CategoryList = ({ categories = [], activeCategory, onSelectCategory }) => 
       {cat}
       </button>
     ))}
-=======
-const SettingsModal = ({
-  isOpen,
-  onClose,
-  darkMode,
-  setDarkMode,
-  playerPreference,
-  setPlayerPreference,
-  autoRefresh,
-  setAutoRefresh,
-  playlists,
-  onAddPlaylist,
-  onRemovePlaylist,
-  onUploadFile,
-  isLoading,
-  statusMessage,
-}) => {
-  if (!isOpen) return null;
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-    <div className="bg-[#0e2a2d] p-6 rounded-xl w-96 text-gray-200 shadow-xl border border-gray-700">
-    <h2 className="text-lg font-bold mb-2">⚙️ Settings</h2>
-    <div className="mb-4">
-    <ProfileSwitcher />
-    </div>
-
-    <div className="mb-4">
-    <label className="block mb-2">Theme</label>
-    <select
-    value={darkMode ? "dark" : "light"}
-    onChange={(e) => setDarkMode(e.target.value === "dark")}
-    className="w-full p-2 bg-[#0c3337] rounded border border-gray-600"
-    >
-    <option value="dark">Dark</option>
-    <option value="light">Light</option>
-    </select>
-    </div>
-
-    <div className="mb-4">
-    <label className="block mb-2">Player Preference</label>
-    <select
-    value={playerPreference}
-    onChange={(e) => setPlayerPreference(e.target.value)}
-    className="w-full p-2 bg-[#0c3337] rounded border border-gray-600"
-    >
-    <option value="internal">Internal Player (ReactPlayer)</option>
-    <option value="vlc">VLC (External App)</option>
-    <option value="embeddedVLC">VLC (Embedded - Coming Soon)</option>
-    </select>
-    {playerPreference === 'vlc' && (
-      <p className="mt-1 text-xs text-gray-400">Opens streams in VLC Media Player</p>
-    )}
-    {playerPreference === 'embeddedVLC' && (
-      <p className="mt-1 text-xs text-yellow-400">Embedded VLC is under development</p>
-    )}
-    </div>
-
-    <div className="mb-4">
-    <label className="block mb-2">Auto Refresh</label>
-    <input
-    type="checkbox"
-    checked={autoRefresh}
-    onChange={(e) => setAutoRefresh(e.target.checked)}
-    className="mr-2"
-    />
-    Enable auto refresh every 60s
-    </div>
-
-    <div className="mb-4">
-    <label className="block mb-2">Playlists (per profile)</label>
-    <PlaylistManager
-    playlists={playlists}
-    onAdd={onAddPlaylist}
-    onRemove={onRemovePlaylist}
-    onUploadFile={onUploadFile}
-    isLoading={isLoading}
-    statusMessage={statusMessage}
-    />
-    </div>
-
-    <button
-    onClick={onClose}
-    className="mt-2 w-full bg-blue-500 hover:bg-blue-600 p-2 rounded"
-    >
-    Close
-    </button>
-    </div>
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
     </div>
   );
 };
 
-<<<<<<< HEAD
-
-// --- App Component (Main Logic) ---
-=======
-function PlaylistManager({ playlists = [], onAdd, onRemove, onUploadFile, isLoading, statusMessage }) {
-  const [url, setUrl] = React.useState("");
-  const [localMsg, setLocalMsg] = React.useState("");
+const ChannelList = ({ channels = [], onSelect, selectedChannelId }) => {
   return (
-    <div>
-    <div className="flex items-center gap-2 mb-2">
-    <input
-    value={url}
-    onChange={(e) => setUrl(e.target.value)}
-    placeholder="Paste M3U URL"
-    className="w-full p-2 bg-[#0c3337] rounded border border-gray-600 text-sm"
-    />
-    <button
-    onClick={async () => {
-      if (!url) return;
-      const ok = await onAdd(url);
-      setLocalMsg(ok ? 'Playlist loaded.' : 'Failed to load playlist (check CORS or URL).');
-      if (ok) setUrl("");
-    }}
-    disabled={!url || isLoading}
-    className={`text-white px-3 py-2 rounded text-sm ${isLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-500'}`}
-    >
-    {isLoading ? 'Loading…' : 'Add'}
-    </button>
-    </div>
-    <div className="flex items-center gap-2 mb-2">
-    <label className="cursor-pointer bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded text-sm">
-    Upload M3U
-    <input
-    type="file"
-    accept=".m3u,.m3u8,.txt"
-    className="hidden"
-    onChange={(e) => {
-      const f = e.target.files && e.target.files[0];
-      if (f) onUploadFile(f);
-    }}
-    />
-    </label>
-    </div>
-    {(statusMessage || localMsg) && (
-      <div className="text-xs text-gray-400 mb-2">{statusMessage || localMsg}</div>
+    <div className="flex flex-col p-4 text-gray-200 text-sm bg-[#0a1f22] flex-1 overflow-y-auto">
+    {channels.length === 0 && (
+      <div className="text-sm text-gray-400">No channels found.</div>
     )}
-    {playlists && playlists.length > 0 ? (
-      <ul className="space-y-2 max-h-40 overflow-auto">
-      {playlists.map((p, idx) => (
-        <li key={`${p}-${idx}`} className="flex items-center justify-between gap-2">
-        <span className="truncate text-xs" title={p}>{p}</span>
-        <div className="flex items-center gap-2">
-        <button
-        onClick={async () => {
-          const ok = await onAdd(p);
-          setLocalMsg(ok ? 'Playlist loaded.' : 'Failed to load playlist.');
-        }}
-        disabled={isLoading}
-        className={`text-xs rounded border border-gray-600 px-2 py-1 ${isLoading ? '' : 'hover:bg-[#123234]'}`}
-        >
-        Load
-        </button>
-        <button
-        onClick={() => onRemove(p)}
-        className="text-xs text-red-400 rounded border border-gray-600 px-2 py-1 hover:bg-red-900/30"
-        >
-        Remove
-        </button>
-        </div>
-        </li>
-      ))}
-      </ul>
-    ) : (
-      <div className="text-xs text-gray-400">No playlists saved yet.</div>
-    )}
+    {channels.map((ch) => (
+      <div
+      key={ch.url || ch.id}
+      onClick={() => onSelect(ch)}
+      className={`flex justify-between items-center border-b border-gray-700 py-2 cursor-pointer hover:bg-[#123234] ${
+        selectedChannelId === ch.id ? 'bg-[#123234]' : ''
+      }`}
+      >
+      <div>
+      <span className="text-red-500 font-bold mr-2">LIVE</span>
+      {ch.name}
+      </div>
+      <span className="text-gray-500">{ch.status}</span>
+      </div>
+    ))}
     </div>
   );
-}
+};
 
 function parseM3UHeader(text) {
   const lines = text.split(/\r?\n/);
@@ -464,23 +225,22 @@ function parseM3UChannels(text) {
     if (line.startsWith('#EXTINF')) {
       const meta = line;
       const url = (lines[i + 1] || '').trim();
-      
+
       const nameMatch = meta.match(/,(.*)$/);
       const name = nameMatch ? nameMatch[1].trim() : 'Channel';
-      
+
       const groupMatch = meta.match(/group-title="([^"]+)"/i);
-      const group = groupMatch ? groupMatch[1].trim() : ''; 
+      const group = groupMatch ? groupMatch[1].trim() : '';
 
       const tvgIdMatch = meta.match(/tvg-id="([^"]+)"/i);
       const tvgId = tvgIdMatch ? tvgIdMatch[1].trim() : null;
-      
+
       parsed.push({ name, url, group, tvgId });
     }
   }
   return parsed;
 }
 
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
 export default function App() {
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -495,27 +255,14 @@ export default function App() {
   const [epgData, setEpgData] = useState(new Map());
   const [isLoadingEpg, setIsLoadingEpg] = useState(false);
 
-<<<<<<< HEAD
-  // Getting state and mutation functions from the store
-  const { settings, setTheme, setPlayerPreference, setAutoRefresh } = useSettings();
+  const { settings } = useSettings();
   const activeProfile = useActiveProfile();
   const addPlaylistToProfile = useProfilesStore((s) => s.addPlaylist);
   const removePlaylistFromProfile = useProfilesStore((s) => s.removePlaylist);
 
-  const darkMode = settings.theme === 'dark'; // Use settings from useSettings()
-  const playerPreference = settings.playerPreference; // Use settings from useSettings()
-  const autoRefresh = settings.autoRefresh; // Use settings from useSettings()
-=======
-  const activeSettings = useActiveSettings();
-  const activeProfile = useActiveProfile();
-  const updateSettings = useProfilesStore((s) => s.updateSettings);
-  const addPlaylistToProfile = useProfilesStore((s) => s.addPlaylist);
-  const removePlaylistFromProfile = useProfilesStore((s) => s.removePlaylist);
-
-  const darkMode = activeSettings?.theme === 'dark';
-  const playerPreference = activeSettings?.playerPreference || 'internal';
-  const autoRefresh = !!activeSettings?.autoRefresh;
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
+  const darkMode = settings.theme === 'dark';
+  const playerPreference = settings.playerPreference;
+  const autoRefresh = settings.autoRefresh;
 
   useEffect(() => {
     if (autoRefresh) {
@@ -554,11 +301,7 @@ export default function App() {
         const xmlText = await res.text();
         const parser = new DOMParser();
         const xmlDoc = parser.parseFromString(xmlText, "text/xml");
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
         const programsByChannel = new Map();
         const allPrograms = xmlDoc.getElementsByTagName("programme");
 
@@ -577,11 +320,7 @@ export default function App() {
           }
           programsByChannel.get(channelId).push(progData);
         }
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
         setEpgData(programsByChannel);
         setPlaylistMessage(prev => prev.replace('Loading EPG...', `Loaded EPG for ${programsByChannel.size} channels.`));
         console.log(`[Matrix_IPTV] EPG loaded with data for ${programsByChannel.size} channels.`);
@@ -596,7 +335,6 @@ export default function App() {
     fetchEPG(epgUrl);
   }, [epgUrl]);
 
-
   const ALLOWED_CATEGORIES = [
     "LATINO CINEMA", "Univisión/Unimas/Telemundo", "SPAIN", "Dominican Republic",
     "ECUADOR", "PERU", "ARGENTINA", "BRAZIL", "AFRICA", "Caribbean", "COLOMBIA",
@@ -608,10 +346,15 @@ export default function App() {
     "Univisión/Unimas/Telemundo": ["univision", "uni vision", "unimas", "uni mas", "telemundo"],
     "SPAIN": ["spain", "españa", "espana", "spanish spain"],
     "Dominican Republic": ["dominican", "dominicana", "rd", "republica dominicana"],
-    "ECUADOR": ["ecuador", "ec"], "PERU": ["peru", "pe"], "ARGENTINA": ["argentina", "ar"],
-    "BRAZIL": ["brazil", "brasil", "br"], "AFRICA": ["africa", "afr", "african"],
-    "Caribbean": ["caribbean", "caribe"], "COLOMBIA": ["colombia", "co"],
-    "GERMANY": ["germany", "deutsch", "de"], "ITALY": ["italy", "italia", "it"],
+    "ECUADOR": ["ecuador", "ec"],
+    "PERU": ["peru", "pe"],
+    "ARGENTINA": ["argentina", "ar"],
+    "BRAZIL": ["brazil", "brasil", "br"],
+    "AFRICA": ["africa", "afr", "african"],
+    "Caribbean": ["caribbean", "caribe"],
+    "COLOMBIA": ["colombia", "co"],
+    "GERMANY": ["germany", "deutsch", "de"],
+    "ITALY": ["italy", "italia", "it"],
     "INDIAN | PUNJABI": ["india", "indian", "hindi", "punjabi", "in"],
   };
 
@@ -663,19 +406,11 @@ export default function App() {
     const items = parseM3UChannels(text);
     const withGroups = items.map((it, idx) => {
       const groups = mapGroupToAllowed(it.group);
-<<<<<<< HEAD
       return {
         id: `${it.name}-${idx}`,
         name: it.name,
         status: 'LIVE',
         url: it.url,
-=======
-      return { 
-        id: `${it.name}-${idx}`, 
-        name: it.name, 
-        status: 'LIVE', 
-        url: it.url, 
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
         groups: groups,
         tvgId: it.tvgId
       };
@@ -731,13 +466,8 @@ export default function App() {
   }
 
   const selectedChannelEpg = selectedChannel
-<<<<<<< HEAD
   ? (epgData.get(selectedChannel.tvgId) || [])
   : [];
-=======
-    ? (epgData.get(selectedChannel.tvgId) || [])
-    : [];
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
 
   const handleCategorySelect = (category) => {
     console.log(`[Matrix_IPTV] Category selected: ${category}`);
@@ -757,12 +487,9 @@ export default function App() {
   };
 
   return (
-    <div
-<<<<<<< HEAD
-    className={`flex h-screen font-sans ${darkMode ? "bg-[#0a1f22] text-gray-100" : "bg-gray-100 text-gray-900"
-    }`}
-    >
-    {/* UPDATED: Use the imported Sidebar */}
+    <div className={`flex h-screen font-sans ${
+      darkMode ? "bg-[#0a1f22] text-gray-100" : "bg-gray-100 text-gray-900"
+    }`}>
     <Sidebar onNavigate={() => {}} onOpenSettings={() => setIsSettingsOpen(true)} />
     <CategoryList
     categories={categories}
@@ -812,104 +539,20 @@ export default function App() {
       </div>
     )}
     <EPGInfo epgData={selectedChannelEpg} />
-    {/* UPDATED: Use the imported SettingsModal component */}
     <SettingsModal
     open={isSettingsOpen}
     onClose={() => setIsSettingsOpen(false)}
     />
     </div>
-=======
-      className={`flex h-screen font-sans ${darkMode ? "bg-[#0a1f22] text-gray-100" : "bg-gray-100 text-gray-900"
-        }`}
-    >
-      <Sidebar onNavigate={() => {}} onOpenSettings={() => setIsSettingsOpen(true)} />
-      <CategoryList 
-        categories={categories} 
-        activeCategory={activeCategory} 
-        onSelectCategory={handleCategorySelect} 
-      />
-      
-      <div className="flex flex-col w-80 border-r border-gray-700">
-        <div className="p-2 border-b border-gray-800">
-          <input
-            type="text"
-            placeholder="🔍 Search channels..."
-            className="w-full p-1 bg-[#0c3337] text-gray-200 rounded border border-gray-600 text-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <FilteredChannelList
-          channels={channels}
-          activeCategory={activeCategory}
-          searchTerm={searchTerm} 
-          onSelect={handleChannelSelect}
-          selectedChannelId={selectedChannel?.id}
-        />
-      </div>
-      
-      <div className="flex flex-col flex-1 relative">
-        <div className="absolute top-2 right-2 flex items-center gap-3 z-10">
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded"
-          >
-            ⚙️
-          </button>
-        </div>
-        
-        <PlayerPreview
-          key={selectedChannel ? selectedChannel.url : 'no-channel'}
-          selectedChannel={selectedChannel}
-          playerPreference={playerPreference}
-          darkMode={darkMode}
-        />
-
-        {(playlistMessage && !isLoadingEpg) && (
-          <div className="px-4 py-2 text-xs text-gray-400 border-t border-gray-800">
-            {playlistMessage}
-          </div>
-        )}
-        <EPGInfo epgData={selectedChannelEpg} />
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          darkMode={darkMode}
-          setDarkMode={(isDark) => {
-            console.log('[Matrix_IPTV] Setting theme:', isDark ? 'dark' : 'light');
-            updateSettings({ theme: isDark ? 'dark' : 'light' });
-          }}
-          playerPreference={playerPreference}
-          setPlayerPreference={(pref) => {
-            console.log('[Matrix_IPTV] Setting player preference:', pref);
-            updateSettings({ playerPreference: pref });
-          }}
-          autoRefresh={autoRefresh}
-          setAutoRefresh={(enabled) => {
-            console.log('[Matrix_IPTV] Setting auto-refresh:', enabled);
-            updateSettings({ autoRefresh: enabled });
-          }}
-          playlists={activeProfile ? activeProfile.playlists : []}
-          onAddPlaylist={async (url) => {
-            const ok = await loadPlaylist(url);
-            if (ok) addPlaylistToProfile(url);
-            return ok;
-          }}
-          onRemovePlaylist={(url) => removePlaylistFromProfile(url)}
-          onUploadFile={(file) => loadPlaylistFromFile(file)}
-          isLoading={isLoadingPlaylist || isLoadingEpg}
-          statusMessage={playlistMessage}
-        />
-      </div>
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
     </div>
   );
 }
 
 function FilteredChannelList({ channels, activeCategory, searchTerm, onSelect, selectedChannelId }) {
   const filtered = React.useMemo(() => {
-    const categoryFiltered = channels.filter((c) => (activeCategory ? c.groups.includes(activeCategory) : true));
-<<<<<<< HEAD
+    const categoryFiltered = channels.filter((c) =>
+    (activeCategory ? c.groups.includes(activeCategory) : true)
+    );
 
     if (!searchTerm) return categoryFiltered;
 
@@ -921,16 +564,3 @@ function FilteredChannelList({ channels, activeCategory, searchTerm, onSelect, s
 
   return <ChannelList channels={filtered} onSelect={onSelect} selectedChannelId={selectedChannelId} />;
 }
-=======
-    
-    if (!searchTerm) return categoryFiltered;
-    
-    const lowerSearch = searchTerm.toLowerCase();
-    return categoryFiltered.filter((c) => 
-      c.name.toLowerCase().includes(lowerSearch)
-    );
-  }, [channels, activeCategory, searchTerm]);
-  
-  return <ChannelList channels={filtered} onSelect={onSelect} selectedChannelId={selectedChannelId} />;
-}
->>>>>>> 33ff4b7b5e069dc9bfdbb7ab39b6459b40717f1b
