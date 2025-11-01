@@ -1,8 +1,18 @@
 # Dependencies
-/node_modules
+node_modules/
 
 # Build output
-/dist
+dist/
+release/
+out/
+build/
+*.AppImage
+*.exe
+*.dmg
 
-# Vite
+# Vite cache
 .vite/
+
+# Logs and temporary files
+*.log
+.DS_Store
