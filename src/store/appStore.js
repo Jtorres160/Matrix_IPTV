@@ -27,9 +27,11 @@ export const useAppStore = create((set, get) => ({
   setSearchTerm: (term) => set({ searchTerm: term }),
 
   // EPG State
+  epgUrl: null,
   epgData: new Map(), // Map of channelId -> Array of programs
   isLoadingEpg: false,
 
+  setEpgUrl: (url) => set({ epgUrl: url }),
   setEpgData: (epgData) => set({ epgData }),
   setIsLoadingEpg: (isLoading) => set({ isLoadingEpg: isLoading }),
 
@@ -40,6 +42,7 @@ export const useAppStore = create((set, get) => ({
     activeCategory: null,
     selectedChannel: null,
     selectedChannelId: null,
+    epgUrl: null,
     epgData: new Map(),
     searchTerm: ''
   })

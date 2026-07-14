@@ -3,6 +3,7 @@ import { useProfilesStore, useActiveProfile } from '../profileStore.js';
 import { useAppStore } from '../store/appStore.js';
 import { LucideLink, LucideFile, LucideServer, LucideGlobe, LucideTrash2, LucidePlay, LucideCheckCircle2, LucideAlertCircle } from 'lucide-react';
 import { loadPlaylist } from '../lib/m3u/playlistService.js';
+import { savePlaylistToCache } from '../lib/m3u/playlistCache.js';
 
 export default function SourceManagerView() {
   const [activeTab, setActiveTab] = useState('m3u_url');
@@ -132,6 +133,8 @@ function M3uUrlManager() {
         setIsProcessing(false);
         return;
       }
+
+      await savePlaylistToCache(url, result);
 
       setStatus({ type: 'success', msg: `Found ${result.channelCount} channels. ✓ Playlist ready` });
       
@@ -301,11 +304,14 @@ function SavedPlaylistsList() {
   const activeProfile = useActiveProfile();
   const removePlaylist = useProfilesStore((s) => s.removePlaylist);
   const updatePlaylist = useProfilesStore((s) => s.updatePlaylist);
+  const setChannels = useAppStore((s) => s.setChannels);
+  const setCategories = useAppStore((s) => s.setCategories);
+  const setEpgUrl = useAppStore((s) => s.setEpgUrl);
   const playlists = activeProfile?.playlists || [];
   const [refreshingId, setRefreshingId] = useState(null);
   const abortControllers = useRef({});
 
-  const handleRefresh = async (playlist) => {
+  const handleRefresh = async (playlist, isFirst) => {
     if (refreshingId === playlist.id || playlist.status === 'downloading') return;
     
     // Abort previous if exists
@@ -330,6 +336,14 @@ function SavedPlaylistsList() {
       if (!result.success) {
          updatePlaylist(playlist.id, { status: 'failed', lastError: result.error });
          return;
+      }
+      
+      await savePlaylistToCache(playlist.url, result);
+      
+      if (isFirst) {
+         setChannels(result.channels);
+         setCategories(result.categories);
+         setEpgUrl(result.epgUrl);
       }
       
       updatePlaylist(playlist.id, { 
@@ -399,7 +413,7 @@ function SavedPlaylistsList() {
                 </div>
                 
                 <button 
-                  onClick={() => handleRefresh(playlist)}
+                  onClick={() => handleRefresh(playlist, idx === 0)}
                   disabled={isRefreshing}
                   className={`p-2.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${isRefreshing ? 'text-blue-400 bg-blue-900/20' : 'text-gray-400 hover:text-white hover:bg-gray-700'}`}
                   title="Manual Refresh"

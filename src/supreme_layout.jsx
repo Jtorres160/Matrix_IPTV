@@ -29,7 +29,6 @@ export default function App() {
 
   // Modals and UI overlays
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [epgUrl, setEpgUrl] = useState(null);
 
   // App Store bindings
   const {
@@ -40,6 +39,8 @@ export default function App() {
     setActiveCategory,
     setSelectedChannel,
     setEpgData,
+    setEpgUrl,
+    epgUrl,
     setIsLoadingPlaylist,
     setPlaylistMessage,
     setIsLoadingEpg,
@@ -69,10 +70,11 @@ export default function App() {
     }
   }, [autoRefresh]);
 
-  // Handle Profile Switch
+  const activePlaylistUrl = activeProfile?.playlists?.[0]?.url;
+
+  // Handle Profile Switch or Main Playlist Change
   useEffect(() => {
     resetVolatileState();
-    setEpgUrl(null);
 
     if (activeProfile && activeProfile.playlists && activeProfile.playlists[0]) {
       const playlist = activeProfile.playlists[0];
@@ -80,7 +82,7 @@ export default function App() {
         loadM3UPlaylist(playlist);
       }
     }
-  }, [activeProfile?.id]);
+  }, [activeProfile?.id, activePlaylistUrl]);
 
   // Handle EPG Fetching
   useEffect(() => {
