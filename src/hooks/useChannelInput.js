@@ -3,14 +3,9 @@ import { usePlayerStore } from '../player/playerStore.js';
 import { useAppStore } from '../store/appStore.js';
 import { analytics, tvEvents } from '../lib/tv/tvAnalytics.js';
 import { usePreviousChannel } from './usePreviousChannel.js';
+import { isEditableElement } from '../lib/tv/isEditableElement.js';
 
 const CHANNEL_INPUT_TIMEOUT = 3000;
-
-const isEditableElement = (element) => {
-  if (!element) return false;
-  const tagName = element.tagName;
-  return tagName === 'INPUT' || tagName === 'TEXTAREA' || element.isContentEditable;
-};
 
 export function useChannelInput(isActive = true) {
   const [channelNumber, setChannelNumber] = useState('');

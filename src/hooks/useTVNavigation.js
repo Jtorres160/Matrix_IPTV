@@ -1,4 +1,5 @@
 import { useEffect, useCallback } from 'react';
+import { isEditableElement } from '../lib/tv/isEditableElement.js';
 
 /**
  * Lightweight custom focus manager for TV-like spatial navigation.
@@ -10,8 +11,7 @@ export function useTVNavigation({ onGuideOpen, onEscape, isActive = true }) {
     if (!isActive) return;
 
     // Ignore if user is typing in an input or textarea
-    const tag = document.activeElement.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) {
+    if (isEditableElement(document.activeElement)) {
       return;
     }
 

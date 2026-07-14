@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { usePlayerStore } from '../player/playerStore.js';
 import { analytics, tvEvents } from '../lib/tv/tvAnalytics.js';
+import { isEditableElement } from '../lib/tv/isEditableElement.js';
 
 export function useTVBackNavigation(options = {}) {
   const {
@@ -13,6 +14,8 @@ export function useTVBackNavigation(options = {}) {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (isEditableElement(document.activeElement)) return;
+
       // Backspace or Escape or 'b' depending on remote mapping
       if (e.key === 'Backspace' || e.key === 'Escape' || e.key === 'GoBack') {
         // Prevent default browser back navigation
