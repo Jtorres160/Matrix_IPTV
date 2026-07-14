@@ -207,7 +207,8 @@ export const useProfilesStore = create(
 				get().addM3uPlaylist(url.substring(url.lastIndexOf('/') + 1) || "M3U Playlist", url);
 			},
 
-			addM3uPlaylist: (name, url) => {
+			addM3uPlaylist: (playlistData) => {
+				const { name, url, status, channelCount, lastUpdated, lastError } = playlistData;
 				if (!url || !url.trim()) {
 					throw new Error("URL cannot be empty");
 				}
@@ -230,7 +231,12 @@ export const useProfilesStore = create(
 						name: (name || '').trim() || url.substring(url.lastIndexOf('/') + 1) || "M3U Playlist",
 						type: 'm3u',
 						url: url,
-						active: true
+						active: true,
+						status: status || 'ready',
+						channelCount: channelCount || 0,
+						lastUpdated: lastUpdated || Date.now(),
+						lastError: lastError || null,
+						createdAt: Date.now()
 					};
 
 					return {
@@ -243,6 +249,32 @@ export const useProfilesStore = create(
 						},
 					}
 				})
+			},
+
+			updatePlaylist: (id, updates) => {
+				set((state) => {
+					const active = state.activeProfileId;
+					if (!active) return {};
+					const profile = state.profiles[active];
+					const playlists = profile.playlists || [];
+
+					const updatedPlaylists = playlists.map(p => {
+						if (p.id === id) {
+							return { ...p, ...updates };
+						}
+						return p;
+					});
+
+					return {
+						profiles: {
+							...state.profiles,
+							[active]: {
+								...profile,
+								playlists: updatedPlaylists
+							}
+						}
+					};
+				});
 			},
 
 			addXtreamPlaylist: async (name, serverUrl, username, password) => {
@@ -387,8 +419,9 @@ export const useProfilesStore = create(
 						
 						if (updatedProfiles[id].playlists && updatedProfiles[id].playlists.length > 0) {
 							const migratedPlaylists = updatedProfiles[id].playlists.map((p, idx) => {
+								let playlistObj = p;
 								if (typeof p === 'string') {
-									return {
+									playlistObj = {
 										id: nanoid(),
 										name: p.substring(p.lastIndexOf('/') + 1) || `Playlist ${idx + 1}`,
 										type: 'm3u',
@@ -396,7 +429,15 @@ export const useProfilesStore = create(
 										active: idx === 0
 									};
 								}
-								return p;
+								
+								// Ensure new fields exist
+								if (playlistObj.status === undefined) playlistObj.status = 'ready';
+								if (playlistObj.channelCount === undefined) playlistObj.channelCount = 0;
+								if (playlistObj.lastUpdated === undefined) playlistObj.lastUpdated = Date.now();
+								if (playlistObj.createdAt === undefined) playlistObj.createdAt = Date.now();
+								if (playlistObj.lastError === undefined) playlistObj.lastError = null;
+
+								return playlistObj;
 							});
 							updatedProfiles[id].playlists = migratedPlaylists;
 						}

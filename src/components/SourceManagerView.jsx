@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { useProfilesStore, useActiveProfile } from '../profileStore.js';
 import { useAppStore } from '../store/appStore.js';
 import { LucideLink, LucideFile, LucideServer, LucideGlobe, LucideTrash2, LucidePlay, LucideCheckCircle2, LucideAlertCircle } from 'lucide-react';
+import { loadPlaylist } from '../lib/m3u/playlistService.js';
 
 export default function SourceManagerView() {
   const [activeTab, setActiveTab] = useState('m3u_url');
@@ -94,22 +95,63 @@ function TabButton({ active, onClick, icon, label, badge }) {
 function M3uUrlManager() {
   const [url, setUrl] = useState("");
   const [status, setStatus] = useState({ type: '', msg: '' });
+  const [isProcessing, setIsProcessing] = useState(false);
+  const abortControllerRef = useRef(null);
   
-  const addPlaylist = useProfilesStore((s) => s.addPlaylist);
-  const { isLoadingPlaylist } = useAppStore();
-
+  const addM3uPlaylist = useProfilesStore((s) => s.addM3uPlaylist);
+  
   const handleAdd = async () => {
     if (!url) return;
-    setStatus({ type: 'loading', msg: 'Importing playlist...' });
+    if (isProcessing) {
+       abortControllerRef.current?.abort();
+    }
+    
+    abortControllerRef.current = new AbortController();
+    setIsProcessing(true);
+    setStatus({ type: 'loading', msg: 'Checking playlist link...' });
     
     try {
-      // For now, we just save the URL. The actual parsing happens in supreme_layout
-      // when the profile switches or when it's first added, but we need to trigger a load.
-      addPlaylist(url);
-      setStatus({ type: 'success', msg: 'Playlist saved successfully. Switch to Live TV to view channels.' });
+      const result = await loadPlaylist(
+        url, 
+        abortControllerRef.current.signal,
+        (state, msg) => {
+          if (state === 'validating' || state === 'downloading' || state === 'parsing') {
+            setStatus({ type: 'loading', msg });
+          }
+        }
+      );
+      
+      if (abortControllerRef.current?.signal.aborted) {
+         setStatus({ type: 'error', msg: 'Request cancelled.' });
+         setIsProcessing(false);
+         return;
+      }
+      
+      if (!result.success) {
+        setStatus({ type: 'error', msg: result.error });
+        setIsProcessing(false);
+        return;
+      }
+
+      setStatus({ type: 'success', msg: `Found ${result.channelCount} channels. ✓ Playlist ready` });
+      
+      addM3uPlaylist({
+        name: "M3U Playlist",
+        url: url,
+        status: 'ready',
+        channelCount: result.channelCount,
+        lastUpdated: Date.now()
+      });
+      
       setUrl("");
     } catch (err) {
-      setStatus({ type: 'error', msg: 'Failed to add playlist.' });
+      if (err.name === 'AbortError') {
+        setStatus({ type: 'error', msg: 'Request cancelled.' });
+      } else {
+        setStatus({ type: 'error', msg: 'Failed to add playlist.' });
+      }
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -139,14 +181,14 @@ function M3uUrlManager() {
           </div>
           <button
             onClick={handleAdd}
-            disabled={!url || isLoadingPlaylist}
+            disabled={!url || isProcessing}
             className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
-              !url || isLoadingPlaylist 
+              !url || isProcessing 
                 ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20'
             }`}
           >
-            {isLoadingPlaylist ? 'Importing...' : 'Add Source'}
+            {isProcessing ? 'Importing...' : 'Add Source'}
           </button>
         </div>
       </div>
@@ -258,7 +300,53 @@ function ComingSoonManager() {
 function SavedPlaylistsList() {
   const activeProfile = useActiveProfile();
   const removePlaylist = useProfilesStore((s) => s.removePlaylist);
+  const updatePlaylist = useProfilesStore((s) => s.updatePlaylist);
   const playlists = activeProfile?.playlists || [];
+  const [refreshingId, setRefreshingId] = useState(null);
+  const abortControllers = useRef({});
+
+  const handleRefresh = async (playlist) => {
+    if (refreshingId === playlist.id || playlist.status === 'downloading') return;
+    
+    // Abort previous if exists
+    if (abortControllers.current[playlist.id]) {
+       abortControllers.current[playlist.id].abort();
+    }
+    
+    const ac = new AbortController();
+    abortControllers.current[playlist.id] = ac;
+    
+    setRefreshingId(playlist.id);
+    updatePlaylist(playlist.id, { status: 'downloading' });
+    
+    try {
+      const result = await loadPlaylist(playlist.url, ac.signal);
+      
+      if (ac.signal.aborted) {
+         updatePlaylist(playlist.id, { status: 'failed', lastError: 'Request cancelled.' });
+         return;
+      }
+      
+      if (!result.success) {
+         updatePlaylist(playlist.id, { status: 'failed', lastError: result.error });
+         return;
+      }
+      
+      updatePlaylist(playlist.id, { 
+        status: 'ready', 
+        channelCount: result.channelCount, 
+        lastUpdated: Date.now(),
+        lastError: null
+      });
+      
+    } catch (e) {
+      if (!ac.signal.aborted) {
+        updatePlaylist(playlist.id, { status: 'failed', lastError: 'Unable to refresh playlist.' });
+      }
+    } finally {
+      if (refreshingId === playlist.id) setRefreshingId(null);
+    }
+  };
 
   if (playlists.length === 0) {
     return (
@@ -272,48 +360,71 @@ function SavedPlaylistsList() {
 
   return (
     <div className="space-y-4">
-      {playlists.map((url, idx) => (
-        <div key={idx} className="flex items-center justify-between p-5 bg-[#123236] rounded-xl border border-gray-700 shadow-md group hover:border-gray-500 transition-all">
-          <div className="flex items-center gap-5 overflow-hidden w-2/3">
-            <div className="w-12 h-12 rounded-xl bg-[#0a1f22] border border-gray-600 flex items-center justify-center shrink-0 shadow-inner">
-              <LucideLink size={20} className="text-blue-400" />
-            </div>
-            <div className="truncate pr-4 w-full">
-              <div className="text-base font-semibold text-white truncate mb-1">{url}</div>
-              <div className="flex items-center gap-3 text-xs text-gray-400 font-medium">
-                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500"></div> Connected</span>
-                <span>•</span>
-                <span>M3U Provider</span>
-                <span>•</span>
-                <span>~ Channels</span>
-                <span>•</span>
-                <span className="text-blue-400/80">EPG Active</span>
+      {playlists.map((playlist, idx) => {
+        const isRefreshing = refreshingId === playlist.id || playlist.status === 'downloading';
+        const isError = playlist.status === 'failed';
+        
+        let statusColor = "bg-green-500";
+        if (isRefreshing) statusColor = "bg-blue-500 animate-pulse";
+        if (isError) statusColor = "bg-red-500";
+        
+        const lastSync = playlist.lastUpdated ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' }).format(new Date(playlist.lastUpdated)) : 'Never';
+        
+        return (
+          <div key={playlist.id || idx} className={`flex flex-col p-5 bg-[#123236] rounded-xl border ${isError ? 'border-red-900/50' : 'border-gray-700'} shadow-md group transition-all`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-5 overflow-hidden w-2/3">
+                <div className="w-12 h-12 rounded-xl bg-[#0a1f22] border border-gray-600 flex items-center justify-center shrink-0 shadow-inner">
+                  <LucideLink size={20} className="text-blue-400" />
+                </div>
+                <div className="truncate pr-4 w-full">
+                  <div className="text-base font-semibold text-white truncate mb-1">{playlist.name || playlist.url}</div>
+                  <div className="flex items-center gap-3 text-xs text-gray-400 font-medium">
+                    <span className="flex items-center gap-1">
+                      <div className={`w-2 h-2 rounded-full ${statusColor}`}></div> 
+                      {isRefreshing ? 'Updating...' : isError ? 'Failed' : 'Connected'}
+                    </span>
+                    <span>•</span>
+                    <span>{playlist.type === 'xtream' ? 'Xtream' : 'M3U Provider'}</span>
+                    <span>•</span>
+                    <span>{playlist.channelCount ? playlist.channelCount.toLocaleString() : '~'} Channels</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="text-right mr-4 hidden md:block">
+                  <div className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Last Sync</div>
+                  <div className="text-sm text-gray-300">{isRefreshing ? 'Updating...' : lastSync}</div>
+                </div>
+                
+                <button 
+                  onClick={() => handleRefresh(playlist)}
+                  disabled={isRefreshing}
+                  className={`p-2.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${isRefreshing ? 'text-blue-400 bg-blue-900/20' : 'text-gray-400 hover:text-white hover:bg-gray-700'}`}
+                  title="Manual Refresh"
+                >
+                  <LucidePlay size={18} className={isRefreshing ? 'animate-spin' : ''} />
+                </button>
+                <button 
+                  onClick={() => removePlaylist(playlist.id || playlist.url)}
+                  className="p-2.5 text-red-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+                  title="Remove Provider"
+                >
+                  <LucideTrash2 size={18} />
+                </button>
               </div>
             </div>
-          </div>
-          
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="text-right mr-4 hidden md:block">
-              <div className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Last Sync</div>
-              <div className="text-sm text-gray-300">Just now</div>
-            </div>
             
-            <button 
-              className="p-2.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-              title="Manual Refresh"
-            >
-              <LucidePlay size={18} />
-            </button>
-            <button 
-              onClick={() => removePlaylist(url)}
-              className="p-2.5 text-red-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
-              title="Remove Provider"
-            >
-              <LucideTrash2 size={18} />
-            </button>
+            {isError && playlist.lastError && (
+              <div className="mt-4 pt-3 border-t border-red-900/30 flex items-center gap-2 text-sm text-red-400">
+                <LucideAlertCircle size={16} />
+                <span>Error: {playlist.lastError}</span>
+              </div>
+            )}
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

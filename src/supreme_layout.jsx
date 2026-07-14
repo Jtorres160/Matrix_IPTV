@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useActiveSettings, useActiveProfile, useProfilesStore } from "./profileStore.js";
 import { useAppStore } from "./store/appStore.js";
-import { processPlaylistText } from "./services/m3uParser.js";
 import { fetchAndParseEPG } from "./services/epgParser.js";
+import { loadPlaylist as fetchPlaylist } from "./lib/m3u/playlistService.js";
+import { getPlaylistFromCache, savePlaylistToCache } from "./lib/m3u/playlistCache.js";
 
 import BottomNavigationBar from "./components/BottomNavigationBar.jsx";
 import Sidebar from "./components/Sidebar.jsx";
@@ -20,6 +21,7 @@ export default function App() {
   const updateSettings = useProfilesStore((s) => s.updateSettings);
   const addPlaylistToProfile = useProfilesStore((s) => s.addPlaylist);
   const removePlaylistFromProfile = useProfilesStore((s) => s.removePlaylist);
+  const updatePlaylist = useProfilesStore((s) => s.updatePlaylist);
 
   const darkMode = activeSettings?.theme === 'dark';
   const playerPreference = activeSettings?.playerPreference || 'internal';
@@ -73,7 +75,10 @@ export default function App() {
     setEpgUrl(null);
 
     if (activeProfile && activeProfile.playlists && activeProfile.playlists[0]) {
-      loadPlaylist(activeProfile.playlists[0]);
+      const playlist = activeProfile.playlists[0];
+      if (playlist.type === 'm3u') {
+        loadM3UPlaylist(playlist);
+      }
     }
   }, [activeProfile?.id]);
 
@@ -102,20 +107,70 @@ export default function App() {
   }, [epgUrl]);
 
   // M3U Loading Logic
-  async function loadPlaylist(url) {
+  async function loadM3UPlaylist(playlist) {
     setPlaylistMessage("");
     setIsLoadingPlaylist(true);
-    console.log(`[Matrix_IPTV] Loading playlist from URL: ${url}`);
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      return processPlaylist(text);
-    } catch (e) {
-      console.error('[Matrix_IPTV] Failed to load M3U URL:', e);
-      setPlaylistMessage('Failed to load M3U URL (CORS or network). Try local file upload.');
+    
+    // Check Cache
+    const cached = await getPlaylistFromCache(playlist.url);
+    if (cached) {
+      setEpgUrl(cached.epgUrl);
+      setChannels(cached.channels);
+      setCategories(cached.categories);
+      setActiveCategory(null);
+      setSelectedChannel(null);
       setIsLoadingPlaylist(false);
-      return false;
+      setPlaylistMessage(`Loaded ${cached.channelCount} channels from cache.`);
+      
+      // Silently refresh in background
+      refreshPlaylist(playlist, true);
+    } else {
+      // No cache, block and load
+      refreshPlaylist(playlist, false);
+    }
+  }
+
+  async function refreshPlaylist(playlist, silent) {
+    if (!silent) {
+       setPlaylistMessage("Loading " + (playlist.name || 'playlist') + "...");
+       setIsLoadingPlaylist(true);
+    }
+    
+    const ac = new AbortController();
+    const result = await fetchPlaylist(playlist.url, ac.signal, (state, msg) => {
+       if (!silent) setPlaylistMessage(msg);
+    });
+    
+    if (result.success) {
+       await savePlaylistToCache(playlist.url, result);
+       
+       // If silent and the view is Live TV, we can optionally update it.
+       // However, updating channels while the user is watching could be disruptive if the channel list completely re-renders.
+       // For now, we will update it so they have fresh channels.
+       setEpgUrl(result.epgUrl);
+       setChannels(result.channels);
+       setCategories(result.categories);
+       if (!silent) {
+         setPlaylistMessage(`Found ${result.channelCount} channels.`);
+         setIsLoadingPlaylist(false);
+       }
+       
+       updatePlaylist(playlist.id, { 
+         status: 'ready', 
+         channelCount: result.channelCount, 
+         lastUpdated: Date.now(),
+         lastError: null
+       });
+    } else {
+       if (!silent) {
+         setPlaylistMessage(`Failed to load ${playlist.name || 'playlist'}. ${result.error}`);
+         setIsLoadingPlaylist(false);
+         setChannels([]); // Clear channels to trigger empty state in Live TV
+       }
+       updatePlaylist(playlist.id, { 
+         status: 'failed', 
+         lastError: result.error 
+       });
     }
   }
 
@@ -125,35 +180,31 @@ export default function App() {
     console.log(`[Matrix_IPTV] Loading playlist from file: ${file.name}`);
     try {
       const text = await file.text();
-      processPlaylist(text);
+      // Temporarily bypass playlistService and use the old m3uParser for local files
+      const { processPlaylistText } = await import('./lib/m3u/m3uParser.js');
+      const { channels, categories, epgUrl: parsedEpgUrl } = processPlaylistText(text);
+      
+      setEpgUrl(parsedEpgUrl);
+      if (!parsedEpgUrl) {
+        console.warn("[Matrix_IPTV] No EPG URL (x-tvg-url) found in playlist header.");
+        setPlaylistMessage("No EPG URL found in playlist header.");
+      }
+      
+      setChannels(channels);
+      setCategories(categories);
+      setActiveCategory(null);
+      setSelectedChannel(null);
+      setIsLoadingPlaylist(false);
+      
+      if (channels.length > 0) {
+        setPlaylistMessage(`Loaded ${channels.length} channels from local file.`);
+      } else {
+        setPlaylistMessage('No channels found in the playlist.');
+      }
     } catch (e) {
       console.error('[Matrix_IPTV] Failed to parse M3U file:', e);
       setPlaylistMessage('Failed to parse M3U file.');
       setIsLoadingPlaylist(false);
-    }
-  }
-
-  function processPlaylist(text) {
-    const { channels, categories, epgUrl: parsedEpgUrl } = processPlaylistText(text);
-    
-    setEpgUrl(parsedEpgUrl);
-    if (!parsedEpgUrl) {
-      console.warn("[Matrix_IPTV] No EPG URL (x-tvg-url) found in playlist header.");
-      setPlaylistMessage("No EPG URL found in playlist header.");
-    }
-    
-    setChannels(channels);
-    setCategories(categories);
-    setActiveCategory(null);
-    setSelectedChannel(null);
-    setIsLoadingPlaylist(false);
-    
-    if (channels.length > 0) {
-      setPlaylistMessage(prev => `Loaded ${channels.length} channels. ` + prev);
-      return true;
-    } else {
-      setPlaylistMessage('No channels found in the playlist.');
-      return false;
     }
   }
 

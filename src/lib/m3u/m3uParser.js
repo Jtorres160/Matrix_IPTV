@@ -32,11 +32,24 @@ export function parseM3UChannels(text) {
     const line = lines[i];
     if (line.startsWith('#EXTINF')) {
       const meta = line;
-      const url = (lines[i + 1] || '').trim();
+      let url = '';
+      
+      // Find the next non-empty line that isn't a comment
+      for (let j = i + 1; j < lines.length; j++) {
+        const nextLine = lines[j].trim();
+        if (nextLine && !nextLine.startsWith('#')) {
+          url = nextLine;
+          break;
+        }
+      }
       
       const nameMatch = meta.match(/,(.*)$/);
-      const name = nameMatch ? nameMatch[1].trim() : 'Channel';
+      const name = nameMatch ? nameMatch[1].trim() : '';
       
+      if (!name || !url) {
+        continue; // Skip junk entries
+      }
+
       const groupMatch = meta.match(/group-title="([^"]+)"/i);
       const group = groupMatch ? groupMatch[1].trim() : ''; 
 

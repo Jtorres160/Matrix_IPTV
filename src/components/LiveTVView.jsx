@@ -23,6 +23,7 @@ export default function LiveTVView() {
   
   const activeCategory = useAppStore((s) => s.activeCategory);
   const setActiveCategory = useAppStore((s) => s.setActiveCategory);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
   
   const selectedChannel = useAppStore((s) => s.selectedChannel);
   const setSelectedChannel = useAppStore((s) => s.setSelectedChannel);
@@ -97,6 +98,27 @@ export default function LiveTVView() {
   }
 
   if (channels.length === 0) {
+    const mainPlaylist = activeProfile?.playlists?.[0];
+    const isFailed = mainPlaylist && mainPlaylist.status === 'failed';
+    
+    if (isFailed) {
+       return (
+         <div className="flex flex-col items-center justify-center h-full w-full bg-[#050c0e] text-center p-8 z-20 relative">
+           <div className="w-24 h-24 bg-red-900/10 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-inner border border-red-900/30">
+             <LucideTv size={48} />
+           </div>
+           <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">No channels available</h2>
+           <p className="text-gray-400 max-w-md mb-6">Your playlist failed to load. {mainPlaylist.lastError ? `(${mainPlaylist.lastError})` : ''}</p>
+           <button 
+             onClick={() => setCurrentView('playlists')} 
+             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-all shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-500"
+           >
+             Manage Playlist
+           </button>
+         </div>
+       );
+    }
+    
     return <EmptyState icon={<LucideTv />} title="No Channels Available" subtitle="Go to Settings > Sources to add an M3U playlist." />;
   }
 
