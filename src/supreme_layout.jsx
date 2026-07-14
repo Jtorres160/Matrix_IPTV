@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ReactPlayer from "react-player";
 import ProfileSwitcher from "./ProfileSwitcher.jsx";
-import { useActiveSettings, useActiveProfile, useProfilesStore } from "./store/profileStore.js";
+import { useActiveSettings, useActiveProfile, useProfilesStore } from "./profileStore.js";
 import { useGlobalPlayer } from "./providers/GlobalPlayerProvider.jsx";
 import BottomNavigationBar from "./components/BottomNavigationBar.jsx";
 import EPGGrid from "./components/EPGGrid.jsx";
