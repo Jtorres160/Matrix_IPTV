@@ -43,11 +43,14 @@ contextBridge.exposeInMainWorld('electronDB', {
   deletePlaylist:    (playlistId) => ipcRenderer.invoke('db:deletePlaylist', playlistId),
   syncPlaylist:      (playlistId) => ipcRenderer.invoke('db:syncPlaylist', playlistId),
   setActivePlaylist: (playlistId) => ipcRenderer.invoke('db:setActivePlaylist', playlistId),
-  getChannels:       (playlistId, groupTitle, limit, offset) => ipcRenderer.invoke('db:getChannels', playlistId, groupTitle, limit, offset),
-  getCategories:     (playlistId) => ipcRenderer.invoke('db:getCategories', playlistId),
-  searchChannels:    (playlistId, searchTerm, limit, offset) => ipcRenderer.invoke('db:searchChannels', playlistId, searchTerm, limit, offset),
+  getChannels:       (playlistId, groupTitle, limit, offset, omitLocked) => ipcRenderer.invoke('db:getChannels', playlistId, groupTitle, limit, offset, omitLocked),
+  getCategories:     (playlistId, omitLocked) => ipcRenderer.invoke('db:getCategories', playlistId, omitLocked),
+  searchChannels:    (playlistId, searchTerm, limit, offset, omitLocked) => ipcRenderer.invoke('db:searchChannels', playlistId, searchTerm, limit, offset, omitLocked),
   toggleFavorite:    (playlistId, channelId) => ipcRenderer.invoke('db:toggleFavorite', playlistId, channelId),
   getFavorites:      (playlistId) => ipcRenderer.invoke('db:getFavorites', playlistId),
+  addLockedCategory: (playlistId, groupTitle) => ipcRenderer.invoke('db:addLockedCategory', playlistId, groupTitle),
+  removeLockedCategory: (playlistId, groupTitle) => ipcRenderer.invoke('db:removeLockedCategory', playlistId, groupTitle),
+  getLockedCategories: (playlistId) => ipcRenderer.invoke('db:getLockedCategories', playlistId),
   getEPGForChannel:  (channelId, startTime, endTime) => ipcRenderer.invoke('db:getEPGForChannel', channelId, startTime, endTime),
   onSyncProgress:    (callback) => {
     const handler = (_, data) => callback(data);

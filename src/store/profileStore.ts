@@ -18,6 +18,8 @@ export type ProfileSettings = {
 	colorOverlay: string
 	/** Channel Column Width (px) */
 	channelColumnWidth: number
+	/** Phase 9: Hashed Parental PIN */
+	parentalPin?: string
 }
 
 export type UserProfile = {
@@ -60,6 +62,14 @@ type ProfilesState = {
 	toggleFavoriteState: (channelId: number) => void
 	toggleFavoriteInDB: (playlistId: string, channelId: number) => Promise<void>
 	loadFavoritesFromDB: (playlistId: string) => Promise<void>
+
+	// Phase 9 Parental Control
+	isParentalUnlocked: boolean
+	setParentalPin: (pin: string) => Promise<void>
+	verifyParentalPin: (pin: string) => Promise<boolean>
+	unlockParental: (pin: string) => Promise<boolean>
+	lockParental: () => void
+	toggleCategoryLockInDB: (playlistId: string, groupTitle: string) => Promise<void>
 }
 
 const DEFAULT_SETTINGS: ProfileSettings = {
@@ -72,6 +82,14 @@ const DEFAULT_SETTINGS: ProfileSettings = {
 }
 
 // --- DELETED generateId() ---
+
+// --- Helper: PIN Hashing ---
+async function hashPin(pin: string): Promise<string> {
+	const msgUint8 = new TextEncoder().encode(pin);
+	const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+	const hashArray = Array.from(new Uint8Array(hashBuffer));
+	return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 const createDefaultProfile = (): UserProfile => ({
 	id: nanoid(), // <-- Use nanoid
@@ -127,6 +145,7 @@ export const useProfilesStore = create<ProfilesState>()(
 			activePlaylistId: null,
 			syncStates: {},
 			favorites: [],
+			isParentalUnlocked: false,
 
 			getActiveProfile: () => {
 				const state = get()
@@ -337,6 +356,52 @@ export const useProfilesStore = create<ProfilesState>()(
 					set({ favorites: favorites.map((f: any) => f.id) });
 				} catch (err) {
 					console.error('Failed to load favorites from database:', err);
+				}
+			},
+
+			// --- Additions for Phase 9 Parental Control ---
+
+			setParentalPin: async (pin: string) => {
+				const hashedPin = await hashPin(pin);
+				get().updateSettings({ parentalPin: hashedPin });
+				// Automatically unlock the session when setting a new PIN
+				set({ isParentalUnlocked: true });
+			},
+
+			verifyParentalPin: async (pin: string) => {
+				const settings = get().getActiveSettings();
+				if (!settings?.parentalPin) return false;
+				const hashedPin = await hashPin(pin);
+				return hashedPin === settings.parentalPin;
+			},
+
+			unlockParental: async (pin: string) => {
+				const isValid = await get().verifyParentalPin(pin);
+				if (isValid) {
+					set({ isParentalUnlocked: true });
+					return true;
+				}
+				return false;
+			},
+
+			lockParental: () => {
+				set({ isParentalUnlocked: false });
+			},
+
+			toggleCategoryLockInDB: async (playlistId: string, groupTitle: string) => {
+				try {
+					// @ts-ignore
+					const lockedCats = await window.electronDB.getLockedCategories(playlistId);
+					const isLocked = lockedCats.includes(groupTitle);
+					if (isLocked) {
+						// @ts-ignore
+						await window.electronDB.removeLockedCategory(playlistId, groupTitle);
+					} else {
+						// @ts-ignore
+						await window.electronDB.addLockedCategory(playlistId, groupTitle);
+					}
+				} catch (err) {
+					console.error('Failed to toggle category lock in database:', err);
 				}
 			}
 		}),

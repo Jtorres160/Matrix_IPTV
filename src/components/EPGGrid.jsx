@@ -48,7 +48,9 @@ const ChannelRow = React.memo(({
           borderRight: '1px solid rgba(255,255,255,0.05)',
           height: `${ROW_HEIGHT}px`,
           cursor: 'pointer',
-          willChange: 'background-color'
+          willChange: 'background-color',
+          gridRow: channelIndex + 2,
+          gridColumn: 1
         }}
       >
         <span style={{ color: '#fff', fontSize: '1rem', fontWeight: 600, width: '45px', flexShrink: 0 }}>
@@ -79,7 +81,9 @@ const ChannelRow = React.memo(({
           position: 'relative',
           height: `${ROW_HEIGHT}px`,
           width: `${TIMELINE_WIDTH_PX}px`,
-          borderBottom: '1px solid rgba(255,255,255,0.05)'
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
+          gridRow: channelIndex + 2,
+          gridColumn: 2
         }}
       >
         {channel.programs?.map((program, programIndex) => {
@@ -131,6 +135,34 @@ const ChannelRow = React.memo(({
 });
 
 export default function EPGGrid({ channels = [], onPlayStream }) {
+  // Virtualization state
+  const [scrollTop, setScrollTop] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = useRef(null);
+
+  const handleScroll = useCallback((e) => {
+    setScrollTop(e.target.scrollTop);
+  }, []);
+
+  useEffect(() => {
+    const handleFocusIn = (e) => {
+      const navIndex = e.target.getAttribute('data-nav-index');
+      if (navIndex !== null) {
+        setActiveIndex(parseInt(navIndex, 10));
+      }
+      const navRow = e.target.getAttribute('data-nav-row');
+      if (navRow !== null) {
+        setActiveIndex(parseInt(navRow, 10));
+      }
+    };
+    
+    const container = containerRef.current;
+    if (container) {
+      container.addEventListener('focusin', handleFocusIn);
+      return () => container.removeEventListener('focusin', handleFocusIn);
+    }
+  }, []);
+
   // Memoize the anchor start time (e.g., 2 hours ago from current time)
   const timelineStart = useMemo(() => {
     const now = Date.now();
@@ -189,9 +221,27 @@ export default function EPGGrid({ channels = [], onPlayStream }) {
     }
   }, [onPlayStream]);
 
+  // Virtualization calculations
+  const BUFFER = 5;
+  const VISIBLE_ROWS = Math.ceil((typeof window !== 'undefined' ? window.innerHeight : 1080) / ROW_HEIGHT);
+  const scrollIndex = Math.floor(scrollTop / ROW_HEIGHT);
+  
+  // Custom Windowing: Guarantee spatial focus is retained by rendering around both scroll and active index
+  const startIndex = Math.max(0, Math.min(scrollIndex, activeIndex) - BUFFER);
+  const endIndex = Math.min(channels.length, Math.max(scrollIndex, activeIndex) + VISIBLE_ROWS + BUFFER);
+  
+  const visibleChannels = useMemo(() => {
+    return channels.slice(startIndex, endIndex).map((channel, i) => ({
+      channel,
+      actualIndex: startIndex + i
+    }));
+  }, [channels, startIndex, endIndex]);
+
   return (
     <div 
       className="epg-container"
+      ref={containerRef}
+      onScroll={handleScroll}
       style={{
         width: '100%',
         height: '100%',
@@ -324,11 +374,14 @@ export default function EPGGrid({ channels = [], onPlayStream }) {
         </div>
 
         {/* === CHANNEL & PROGRAM ROWS === */}
-        {channels.map((channel, idx) => (
+        {channels.length > 0 && (
+          <div style={{ gridRow: channels.length + 1, gridColumn: 1, height: 0 }} />
+        )}
+        {visibleChannels.map(({ channel, actualIndex }) => (
           <ChannelRow 
-            key={channel.id || idx}
+            key={channel.id || actualIndex}
             channel={channel}
-            channelIndex={idx}
+            channelIndex={actualIndex}
             timelineStart={timelineStart}
             onProgramSelect={handleProgramSelect}
             onChannelSelect={(c) => onPlayStream && onPlayStream(c.streamUrl)}

@@ -90,6 +90,14 @@ const SCHEMA_SQL = `
 
   CREATE INDEX IF NOT EXISTS idx_channels_name
     ON channels(name);
+
+  -- ── Phase 9: Parental Control ─────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS locked_categories (
+    playlist_id TEXT NOT NULL,
+    group_title TEXT NOT NULL,
+    PRIMARY KEY (playlist_id, group_title),
+    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+  );
 `;
 
 // ── Database Initialization ──────────────────────────────────────────────────
@@ -227,6 +235,59 @@ function _prepareStatements() {
     INNER JOIN favorites f ON c.id = f.channel_id
     WHERE f.playlist_id = ?
     ORDER BY c.name ASC
+  `);
+
+  // ── Parental Control ───────────────────────────────────────────────────
+  stmts.addLockedCategory = db.prepare(`
+    INSERT OR IGNORE INTO locked_categories (playlist_id, group_title) VALUES (?, ?)
+  `);
+
+  stmts.removeLockedCategory = db.prepare(`
+    DELETE FROM locked_categories WHERE playlist_id = ? AND group_title = ?
+  `);
+
+  stmts.getLockedCategories = db.prepare(`
+    SELECT group_title FROM locked_categories WHERE playlist_id = ?
+  `);
+
+  stmts.getChannelsByPlaylistOmitLocked = db.prepare(`
+    SELECT c.* FROM channels c
+    LEFT JOIN locked_categories lc ON c.playlist_id = lc.playlist_id AND c.group_title = lc.group_title
+    WHERE c.playlist_id = ? AND lc.group_title IS NULL
+    ORDER BY c.ROWID ASC LIMIT ? OFFSET ?
+  `);
+
+  stmts.getChannelsByPlaylistAndGroupOmitLocked = db.prepare(`
+    SELECT c.* FROM channels c
+    LEFT JOIN locked_categories lc ON c.playlist_id = lc.playlist_id AND c.group_title = lc.group_title
+    WHERE c.playlist_id = ? AND c.group_title = ? AND lc.group_title IS NULL
+    ORDER BY c.ROWID ASC LIMIT ? OFFSET ?
+  `);
+
+  stmts.getCategoriesOmitLocked = db.prepare(`
+    SELECT DISTINCT c.group_title FROM channels c
+    LEFT JOIN locked_categories lc ON c.playlist_id = lc.playlist_id AND c.group_title = lc.group_title
+    WHERE c.playlist_id = ? AND c.group_title IS NOT NULL AND c.group_title != '' AND lc.group_title IS NULL
+    ORDER BY c.group_title ASC
+  `);
+
+  stmts.getChannelCountOmitLocked = db.prepare(`
+    SELECT COUNT(c.id) AS count FROM channels c
+    LEFT JOIN locked_categories lc ON c.playlist_id = lc.playlist_id AND c.group_title = lc.group_title
+    WHERE c.playlist_id = ? AND lc.group_title IS NULL
+  `);
+
+  stmts.getChannelCountByGroupOmitLocked = db.prepare(`
+    SELECT COUNT(c.id) AS count FROM channels c
+    LEFT JOIN locked_categories lc ON c.playlist_id = lc.playlist_id AND c.group_title = lc.group_title
+    WHERE c.playlist_id = ? AND c.group_title = ? AND lc.group_title IS NULL
+  `);
+
+  stmts.searchChannelsOmitLocked = db.prepare(`
+    SELECT c.* FROM channels c
+    LEFT JOIN locked_categories lc ON c.playlist_id = lc.playlist_id AND c.group_title = lc.group_title
+    WHERE c.playlist_id = ? AND c.name LIKE ? AND lc.group_title IS NULL
+    ORDER BY c.ROWID ASC LIMIT ? OFFSET ?
   `);
 
   // ── EPG Queries ──────────────────────────────────────────────────────
@@ -395,25 +456,37 @@ function clearPlaylistChannels(playlistId) {
  * @param {string|null} groupTitle Filter by group (null = all)
  * @param {number} [limit=200] Max rows to return
  * @param {number} [offset=0] Offset for pagination
+ * @param {boolean} [omitLocked=false] Hide locked categories
  * @returns {Array<Object>} Channel rows
  */
-function getChannels(playlistId, groupTitle, limit = 200, offset = 0) {
+function getChannels(playlistId, groupTitle, limit = 200, offset = 0, omitLocked = false) {
   _ensureDB();
 
   if (groupTitle) {
+    if (omitLocked) {
+      return stmts.getChannelsByPlaylistAndGroupOmitLocked.all(playlistId, groupTitle, limit, offset);
+    }
     return stmts.getChannelsByPlaylistAndGroup.all(playlistId, groupTitle, limit, offset);
+  }
+  if (omitLocked) {
+    return stmts.getChannelsByPlaylistOmitLocked.all(playlistId, limit, offset);
   }
   return stmts.getChannelsByPlaylist.all(playlistId, limit, offset);
 }
+
 
 /**
  * Returns distinct group_title values for a playlist (i.e., categories).
  *
  * @param {string} playlistId
+ * @param {boolean} [omitLocked=false]
  * @returns {Array<string>} Category names
  */
-function getCategories(playlistId) {
+function getCategories(playlistId, omitLocked = false) {
   _ensureDB();
+  if (omitLocked) {
+    return stmts.getCategoriesOmitLocked.all(playlistId).map(row => row.group_title);
+  }
   return stmts.getCategories.all(playlistId).map(row => row.group_title);
 }
 
@@ -422,12 +495,19 @@ function getCategories(playlistId) {
  *
  * @param {string} playlistId
  * @param {string|null} groupTitle
+ * @param {boolean} [omitLocked=false]
  * @returns {number}
  */
-function getChannelCount(playlistId, groupTitle) {
+function getChannelCount(playlistId, groupTitle, omitLocked = false) {
   _ensureDB();
   if (groupTitle) {
+    if (omitLocked) {
+      return stmts.getChannelCountByGroupOmitLocked.get(playlistId, groupTitle).count;
+    }
     return stmts.getChannelCountByGroup.get(playlistId, groupTitle).count;
+  }
+  if (omitLocked) {
+    return stmts.getChannelCountOmitLocked.get(playlistId).count;
   }
   return stmts.getChannelCount.get(playlistId).count;
 }
@@ -439,10 +519,14 @@ function getChannelCount(playlistId, groupTitle) {
  * @param {string} searchTerm
  * @param {number} [limit=100]
  * @param {number} [offset=0]
+ * @param {boolean} [omitLocked=false]
  * @returns {Array<Object>}
  */
-function searchChannels(playlistId, searchTerm, limit = 100, offset = 0) {
+function searchChannels(playlistId, searchTerm, limit = 100, offset = 0, omitLocked = false) {
   _ensureDB();
+  if (omitLocked) {
+    return stmts.searchChannelsOmitLocked.all(playlistId, `%${searchTerm}%`, limit, offset);
+  }
   return stmts.searchChannels.all(playlistId, `%${searchTerm}%`, limit, offset);
 }
 
@@ -629,4 +713,9 @@ module.exports = {
   cleanupExpiredEPG,
   clearAllEPG,
   getEPGCount,
+
+  // Parental Control
+  addLockedCategory: (playlistId, groupTitle) => stmts.addLockedCategory.run(playlistId, groupTitle),
+  removeLockedCategory: (playlistId, groupTitle) => stmts.removeLockedCategory.run(playlistId, groupTitle),
+  getLockedCategories: (playlistId) => stmts.getLockedCategories.all(playlistId).map(r => r.group_title),
 };

@@ -532,12 +532,13 @@ function registerIPCHandlers(mainWindow) {
    * @param {string|null} groupTitle
    * @param {number} limit
    * @param {number} offset
+   * @param {boolean} omitLocked
    * @returns {Object} { channels, total }
    */
-  ipcMain.handle('db:getChannels', (_e, playlistId, groupTitle, limit = 200, offset = 0) => {
+  ipcMain.handle('db:getChannels', (_e, playlistId, groupTitle, limit = 200, offset = 0, omitLocked = false) => {
     try {
-      const channels = db.getChannels(playlistId, groupTitle || null, limit, offset);
-      const total = db.getChannelCount(playlistId, groupTitle || null);
+      const channels = db.getChannels(playlistId, groupTitle || null, limit, offset, omitLocked);
+      const total = db.getChannelCount(playlistId, groupTitle || null, omitLocked);
       return { channels, total };
     } catch (err) {
       console.error('[IPC] db:getChannels error:', err);
@@ -548,11 +549,12 @@ function registerIPCHandlers(mainWindow) {
   /**
    * Get distinct categories (group_title values) for a playlist.
    * @param {string} playlistId
+   * @param {boolean} omitLocked
    * @returns {Array<string>}
    */
-  ipcMain.handle('db:getCategories', (_e, playlistId) => {
+  ipcMain.handle('db:getCategories', (_e, playlistId, omitLocked = false) => {
     try {
-      return db.getCategories(playlistId);
+      return db.getCategories(playlistId, omitLocked);
     } catch (err) {
       console.error('[IPC] db:getCategories error:', err);
       return [];
@@ -565,11 +567,12 @@ function registerIPCHandlers(mainWindow) {
    * @param {string} searchTerm
    * @param {number} limit
    * @param {number} offset
+   * @param {boolean} omitLocked
    * @returns {Object} { channels }
    */
-  ipcMain.handle('db:searchChannels', (_e, playlistId, searchTerm, limit = 100, offset = 0) => {
+  ipcMain.handle('db:searchChannels', (_e, playlistId, searchTerm, limit = 100, offset = 0, omitLocked = false) => {
     try {
-      const channels = db.searchChannels(playlistId, searchTerm, limit, offset);
+      const channels = db.searchChannels(playlistId, searchTerm, limit, offset, omitLocked);
       return { channels };
     } catch (err) {
       console.error('[IPC] db:searchChannels error:', err);
@@ -603,6 +606,37 @@ function registerIPCHandlers(mainWindow) {
       return db.getFavorites(playlistId);
     } catch (err) {
       console.error('[IPC] db:getFavorites error:', err);
+      return [];
+    }
+  });
+
+  // ── Parental Control ──────────────────────────────────────────────────
+
+  ipcMain.handle('db:addLockedCategory', (_e, playlistId, groupTitle) => {
+    try {
+      db.addLockedCategory(playlistId, groupTitle);
+      return { success: true };
+    } catch (err) {
+      console.error('[IPC] db:addLockedCategory error:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('db:removeLockedCategory', (_e, playlistId, groupTitle) => {
+    try {
+      db.removeLockedCategory(playlistId, groupTitle);
+      return { success: true };
+    } catch (err) {
+      console.error('[IPC] db:removeLockedCategory error:', err);
+      return { success: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle('db:getLockedCategories', (_e, playlistId) => {
+    try {
+      return db.getLockedCategories(playlistId);
+    } catch (err) {
+      console.error('[IPC] db:getLockedCategories error:', err);
       return [];
     }
   });
