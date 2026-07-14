@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useProfilesStore, useActiveProfile } from '../profileStore.js';
+import { useProfilesStore, useActiveProfile } from '../store/profileStore';
 import { useAppStore } from '../store/appStore.js';
 import { LucideLink, LucideFile, LucideServer, LucideGlobe, LucideTrash2, LucidePlay, LucideCheckCircle2, LucideAlertCircle } from 'lucide-react';
 import { loadPlaylist } from '../lib/m3u/playlistService.js';
@@ -145,7 +145,33 @@ function M3uUrlManager() {
         channelCount: result.channelCount,
         lastUpdated: Date.now()
       });
-      
+
+      // ── Phase 1: SQLite pipeline bridge ───────────────────────────────────
+      // Also ingest into the SQLite pipeline (Path B) so VOD / Series /
+      // DB-backed search are populated. This is intentionally NON-FATAL: the
+      // Live TV path above (profileStore + IndexedDB) remains the source of
+      // truth for now and must never be blocked by a database failure.
+      try {
+        if (typeof window !== 'undefined' && window.electronDB) {
+          const state = useProfilesStore.getState();
+          const profile = state.getActiveProfile();
+          // Reuse the profile playlist id as the DB playlist id so the two
+          // records stay linked (upsert-by-id makes re-adds idempotent).
+          const created = profile?.playlists?.find((p) => p.url === url);
+          if (profile && created?.id) {
+            await state.addPlaylistToDB(profile.id, {
+              id: created.id,
+              name: created.name,
+              url: created.url,
+              type: 'm3u',
+            });
+            await state.setActivePlaylistInDB(created.id);
+          }
+        }
+      } catch (dbErr) {
+        console.error('[SourceManager] SQLite ingestion failed (non-fatal):', dbErr);
+      }
+
       setUrl("");
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -346,13 +372,25 @@ function SavedPlaylistsList() {
          setEpgUrl(result.epgUrl);
       }
       
-      updatePlaylist(playlist.id, { 
-        status: 'ready', 
-        channelCount: result.channelCount, 
+      updatePlaylist(playlist.id, {
+        status: 'ready',
+        channelCount: result.channelCount,
         lastUpdated: Date.now(),
         lastError: null
       });
-      
+
+      // ── Phase 1B: keep SQLite (Path B) in sync on manual refresh ──────────
+      // Re-run the main-process ingestion so channels/VOD/series stay current.
+      // Non-fatal: the renderer refresh above already updated the Live TV view
+      // and IndexedDB, so a DB failure must not surface to the user.
+      try {
+        if (typeof window !== 'undefined' && window.electronDB && playlist.id) {
+          await window.electronDB.syncPlaylist(playlist.id);
+        }
+      } catch (dbErr) {
+        console.error('[SourceManager] SQLite resync on refresh failed (non-fatal):', dbErr);
+      }
+
     } catch (e) {
       if (!ac.signal.aborted) {
         updatePlaylist(playlist.id, { status: 'failed', lastError: 'Unable to refresh playlist.' });

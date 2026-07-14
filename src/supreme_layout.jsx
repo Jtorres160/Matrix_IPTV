@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useActiveSettings, useActiveProfile, useProfilesStore } from "./profileStore.js";
+import { useActiveSettings, useActiveProfile, useProfilesStore } from "./store/profileStore";
 import { useAppStore } from "./store/appStore.js";
 import { fetchAndParseEPG } from "./services/epgParser.js";
 import { loadPlaylist as fetchPlaylist } from "./lib/m3u/playlistService.js";
@@ -170,12 +170,23 @@ export default function App() {
          setIsLoadingPlaylist(false);
        }
        
-       updatePlaylist(playlist.id, { 
-         status: 'ready', 
-         channelCount: result.channelCount, 
+       updatePlaylist(playlist.id, {
+         status: 'ready',
+         channelCount: result.channelCount,
          lastUpdated: Date.now(),
          lastError: null
        });
+
+       // ── Phase 1B: keep SQLite (Path B) in sync on startup/background refresh ─
+       // Fire-and-forget: this must NOT block Live TV rendering. The renderer
+       // pipeline above is the source of truth for the current view; SQLite is
+       // updated in the background for VOD/Series/DB-search. Errors are logged
+       // only, never surfaced.
+       if (typeof window !== 'undefined' && window.electronDB && playlist.id) {
+         window.electronDB
+           .syncPlaylist(playlist.id)
+           .catch((dbErr) => console.error('[Matrix_IPTV] Background SQLite resync failed (non-fatal):', dbErr));
+       }
     } else {
        if (!silent) {
          setPlaylistMessage(`Failed to load ${playlist.name || 'playlist'}. ${result.error}`);

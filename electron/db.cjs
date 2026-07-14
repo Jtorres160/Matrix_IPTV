@@ -97,6 +97,8 @@ const SCHEMA_SQL = `
     group_title TEXT NOT NULL,
     PRIMARY KEY (playlist_id, group_title),
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+  );
+
   -- ── Phase 10: VOD and Series ─────────────────────────────────────────────
   CREATE TABLE IF NOT EXISTS vod_streams (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
