@@ -12,6 +12,8 @@ import CategoryRail from './tv/CategoryRail.jsx';
 import { rankContinueWatching, getRecommendedChannels } from '../lib/tv/channelRanking.js';
 import { TV_CATEGORIES, getChannelsByCategory } from '../lib/tv/channelCategories.js';
 import { useChannelInput } from '../hooks/useChannelInput.js';
+import { useWatchSession } from '../hooks/useWatchSession.js';
+import { useTVBackNavigation } from '../hooks/useTVBackNavigation.js';
 
 export default function LiveTVView() {
   const channels = useAppStore((s) => s.channels);
@@ -53,6 +55,15 @@ export default function LiveTVView() {
 
   // Channel number entry and switching
   useChannelInput(!isGuideOpen && !isLoadingPlaylist && channels.length > 0);
+  
+  // Session tracking
+  useWatchSession();
+  
+  // Back navigation hierarchy
+  useTVBackNavigation({
+    isEPGOpen: isGuideOpen,
+    closeEPG: () => setIsGuideOpen(false)
+  });
 
   // Filtering for All Channels list
   const filteredChannels = useMemo(() => {

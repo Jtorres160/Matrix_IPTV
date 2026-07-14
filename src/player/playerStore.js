@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { analytics, tvEvents } from '../lib/tv/tvAnalytics.js';
 
 let controlsTimeout = null;
 let retryTimeout = null;
@@ -41,10 +42,23 @@ export const usePlayerStore = create((set, get) => ({
     get().showControlsTemporarily();
   },
 
-  play: () => set({ playbackState: 'playing' }),
-  pause: () => set({ playbackState: 'paused' }),
-  
-  setPlaybackState: (state) => set({ playbackState: state }),
+  setPlaybackState: (state) => {
+    const { playbackState, activeChannel } = get();
+    if (state !== playbackState) {
+      if (state === 'playing') {
+        analytics.track(tvEvents.PLAYBACK_STARTED, { channelId: activeChannel?.id });
+        if (playbackState === 'buffering' || playbackState === 'idle') {
+           analytics.track(tvEvents.CHANNEL_SWITCH_COMPLETED, { channelId: activeChannel?.id });
+        }
+      } else if (state === 'paused') {
+        analytics.track(tvEvents.PLAYBACK_PAUSED, { channelId: activeChannel?.id });
+      }
+      set({ playbackState: state });
+    }
+  },
+
+  play: () => get().setPlaybackState('playing'),
+  pause: () => get().setPlaybackState('paused'),
 
   toggleFullscreen: () => {
     const isFull = !get().isFullscreen;

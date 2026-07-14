@@ -16,9 +16,21 @@ export default function ContinueWatchingRail({ historyItems, onPlay }) {
         const channel = item.channel;
         if (!channel) return null;
         
-        // Render watch duration if available
-        const mins = Math.floor((item.totalWatchSeconds || 0) / 60);
-        const durationText = mins > 0 ? `Watched ${mins} min` : 'Just started';
+        // Session Insights
+        const sessions = item.sessions || 1;
+        const now = Date.now();
+        const lastWatchedAt = item.lastWatchedAt || item.timestamp || now;
+        const diffMinutes = Math.floor((now - lastWatchedAt) / 60000);
+        
+        let timeAgoText = '';
+        if (diffMinutes < 1) timeAgoText = 'Just now';
+        else if (diffMinutes < 60) timeAgoText = `${diffMinutes} mins ago`;
+        else if (diffMinutes < 1440) timeAgoText = `${Math.floor(diffMinutes / 60)} hrs ago`;
+        else timeAgoText = `${Math.floor(diffMinutes / 1440)} days ago`;
+
+        const freqText = sessions > 1 ? `Watched ${sessions} times` : 'Watched 1 time';
+        const mins = Math.floor((item.totalWatchSeconds || item.watchDuration || 0) / 60);
+        const durationText = mins > 0 ? ` • ${mins}m total` : '';
         
         return (
           <button
@@ -34,10 +46,13 @@ export default function ContinueWatchingRail({ historyItems, onPlay }) {
                  <LucideImageOff size={48} className="text-gray-700 opacity-50" />
                )}
             </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent p-4 flex flex-col justify-end">
+            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent p-4 flex flex-col justify-end">
               <h4 className="text-white font-bold truncate text-lg drop-shadow-md">{channel.name}</h4>
-              <p className="text-xs text-gray-400 truncate">
-                ▶ {durationText}
+              <p className="text-[11px] text-blue-300 font-medium truncate mt-1">
+                {freqText}{durationText}
+              </p>
+              <p className="text-[11px] text-gray-400 truncate">
+                Last watched: {timeAgoText}
               </p>
             </div>
           </button>

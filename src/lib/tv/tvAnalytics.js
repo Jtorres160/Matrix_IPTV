@@ -1,10 +1,15 @@
 export const tvEvents = {
   CHANNEL_PLAY: 'CHANNEL_PLAY',
   CHANNEL_SWITCH: 'CHANNEL_SWITCH',
+  CHANNEL_SWITCH_STARTED: 'CHANNEL_SWITCH_STARTED',
+  CHANNEL_SWITCH_COMPLETED: 'CHANNEL_SWITCH_COMPLETED',
   GUIDE_OPEN: 'GUIDE_OPEN',
   FAVORITE_ADD: 'FAVORITE_ADD',
   WATCH_SESSION_START: 'WATCH_SESSION_START',
-  WATCH_SESSION_END: 'WATCH_SESSION_END'
+  WATCH_SESSION_END: 'WATCH_SESSION_END',
+  PLAYER_READY: 'PLAYER_READY',
+  PLAYBACK_STARTED: 'PLAYBACK_STARTED',
+  PLAYBACK_PAUSED: 'PLAYBACK_PAUSED'
 };
 
 class TVAnalytics {
@@ -19,13 +24,15 @@ class TVAnalytics {
     };
   }
 
-  track(event, payload) {
+  track(type, payload = {}) {
+    const { channelId, ...metadata } = payload;
     const eventData = {
-      event,
+      type,
+      channelId,
       timestamp: Date.now(),
-      ...payload
+      metadata
     };
-    console.log(`[TV Analytics] ${event}`, eventData);
+    console.log(`[TV Analytics] ${type}`, eventData);
     this.subscribers.forEach(cb => cb(eventData));
   }
 }
