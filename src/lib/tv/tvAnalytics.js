@@ -1,3 +1,5 @@
+import { logger } from '../logger.js';
+
 export const tvEvents = {
   CHANNEL_PLAY: 'CHANNEL_PLAY',
   CHANNEL_SWITCH: 'CHANNEL_SWITCH',
@@ -15,6 +17,7 @@ export const tvEvents = {
 class TVAnalytics {
   constructor() {
     this.subscribers = [];
+    this.lastEventCache = new Map();
   }
 
   subscribe(callback) {
@@ -26,13 +29,26 @@ class TVAnalytics {
 
   track(type, payload = {}) {
     const { channelId, ...metadata } = payload;
+    const cacheKey = `${type}-${channelId || 'global'}`;
+    const now = Date.now();
+
+    // Deduplication window: 500ms
+    if (this.lastEventCache.has(cacheKey)) {
+      const lastTimestamp = this.lastEventCache.get(cacheKey);
+      if (now - lastTimestamp < 500) {
+        return; // Skip duplicate event
+      }
+    }
+
+    this.lastEventCache.set(cacheKey, now);
+
     const eventData = {
       type,
       channelId,
-      timestamp: Date.now(),
+      timestamp: now,
       metadata
     };
-    console.log(`[TV Analytics] ${type}`, eventData);
+    logger.debug(`[TV Analytics] ${type}`, eventData);
     this.subscribers.forEach(cb => cb(eventData));
   }
 }

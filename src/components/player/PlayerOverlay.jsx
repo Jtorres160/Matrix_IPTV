@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { usePlayerStore } from '../../player/playerStore.js';
 import { LucideImageOff, LucideLoader2 } from 'lucide-react';
+import { sanitizeText } from '../../lib/security/sanitize.js';
+import { getSafeImageUrl } from '../../lib/security/imageSafety.js';
 
 export default function PlayerOverlay() {
   const { activeChannel, playbackState } = usePlayerStore();
@@ -30,6 +32,10 @@ export default function PlayerOverlay() {
 
   if (!displayChannel) return null;
 
+  const safeLogoUrl = getSafeImageUrl(displayChannel.logo);
+  const safeName = sanitizeText(displayChannel.name) || 'Unknown Channel';
+  const safeGroup = sanitizeText(displayChannel.groups?.[0]) || 'Live';
+
   return (
     <div 
       className={`absolute inset-0 z-30 pointer-events-none transition-opacity duration-1000 ${
@@ -40,10 +46,10 @@ export default function PlayerOverlay() {
         
         {/* Channel Logo (Premium TV styling) */}
         <div className="w-24 h-24 rounded-2xl bg-[#0a1f22]/80 backdrop-blur-xl border border-white/10 flex items-center justify-center overflow-hidden shadow-2xl shrink-0">
-          {displayChannel.logo ? (
+          {safeLogoUrl ? (
             <img 
-              src={displayChannel.logo} 
-              alt={displayChannel.name} 
+              src={safeLogoUrl} 
+              alt={safeName} 
               className="w-full h-full object-contain p-2" 
               onError={(e) => e.target.style.display = 'none'} 
             />
@@ -56,7 +62,7 @@ export default function PlayerOverlay() {
         <div className="flex-1 pb-1">
           <div className="flex items-center gap-3 mb-2">
             <span className="px-2.5 py-0.5 bg-blue-600 text-white text-xs font-bold tracking-widest uppercase rounded shadow-sm">
-              {displayChannel.groups?.[0] || 'Live'}
+              {safeGroup}
             </span>
             {(playbackState === 'buffering' || playbackState === 'idle') && (
               <span className="flex items-center gap-2 text-sm text-gray-400 font-medium animate-pulse">
@@ -73,7 +79,7 @@ export default function PlayerOverlay() {
           </div>
           
           <h2 className="text-5xl font-extrabold text-white mb-2 drop-shadow-[0_4px_4px_rgba(0,0,0,0.8)] tracking-tight">
-            {displayChannel.name}
+            {safeName}
           </h2>
           
           <div className="flex items-center gap-2 text-base text-gray-300 font-medium drop-shadow-md">
