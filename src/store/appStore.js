@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export const useAppStore = create((set, get) => ({
+export const useAppStore = create((set) => ({
   // View State
   currentView: 'live-tv',
   setCurrentView: (view) => set({ currentView: view }),

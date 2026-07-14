@@ -72,12 +72,14 @@ export default function useRecordingTelemetry() {
 
   // Snapshot ref so callbacks can read current state without stale closures
   const recordingsRef = useRef(recordings);
-  recordingsRef.current = recordings;
+  useEffect(() => {
+    recordingsRef.current = recordings;
+  }, [recordings]);
 
   // ─── rAF Flush Loop ───
   // Reads the mutable accumulator and publishes to React state if dirty.
   // Uses shallow comparison to preserve object identity for unchanged entries.
-  const flushLoop = useCallback(() => {
+  const flushLoop = useCallback(function loop() {
     if (!isMountedRef.current) return;
 
     if (dirtyRef.current) {
@@ -108,7 +110,7 @@ export default function useRecordingTelemetry() {
       });
     }
 
-    rafIdRef.current = requestAnimationFrame(flushLoop);
+    rafIdRef.current = requestAnimationFrame(loop);
   }, []);
 
   // ─── Start Recording ───

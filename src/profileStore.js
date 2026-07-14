@@ -87,7 +87,8 @@ export const useProfilesStore = create(
 
 			deleteProfile: (profileId) => {
 				set((state) => {
-					const { [profileId]: _removed, ...rest } = state.profiles
+					const rest = { ...state.profiles }
+					delete rest[profileId]
 					let nextActive = state.activeProfileId
 					if (state.activeProfileId === profileId) {
 						const remainingIds = Object.keys(rest)
@@ -324,30 +325,7 @@ export const useProfilesStore = create(
 				return newPlaylist;
 			},
 
-			toggleFavorite: (streamId) => {
-				if (!streamId) return;
-				set((state) => {
-					const active = state.activeProfileId
-					if (!active) return {}
-					const profile = state.profiles[active]
-					const favorites = profile.favorites || []
-					const isFav = favorites.includes(streamId)
 
-					const nextFavorites = isFav
-						? favorites.filter(id => id !== streamId)
-						: [...favorites, streamId]
-
-					return {
-						profiles: {
-							...state.profiles,
-							[active]: {
-								...profile,
-								favorites: nextFavorites
-							}
-						}
-					}
-				})
-			},
 
 			removePlaylist: (urlOrId) => {
 				set((state) => {
@@ -371,7 +349,7 @@ export const useProfilesStore = create(
 		{
 			name: 'iptv.profiles.v1',
 			storage: createJSONStorage(getStorage),
-			onFinishHydration: (state, set, get) => {
+			onFinishHydration: (state, set) => {
 				console.log('[Matrix_IPTV] Rehydrating profile store from disk...');
 				// ensure at least one profile
 				set((s) => {

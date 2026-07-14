@@ -262,7 +262,7 @@ export default function useKeyboardNavigation({
   }, [activeZone, focusStates, zonesConfig, onEnter, onBack]);
 
   // Extract simple index or grid coordinate based on current active config
-  const activeFocusState = getZoneFocus(activeZone);
+  const activeFocusState = focusStates[activeZone] || { index: 0, row: 0, col: 0 };
   const activeConfig = zonesConfig[activeZone] || {};
   const focusedIndex = activeConfig.type === 'grid' 
     ? { row: activeFocusState.row, col: activeFocusState.col }

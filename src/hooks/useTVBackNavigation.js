@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { usePlayerStore } from '../player/playerStore.js';
-import { analytics, tvEvents } from '../lib/tv/tvAnalytics.js';
 import { isEditableElement } from '../lib/tv/isEditableElement.js';
 
 export function useTVBackNavigation(options = {}) {

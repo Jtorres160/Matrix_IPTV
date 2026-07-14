@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { usePlayerStore } from '../player/playerStore.js';
 import { useToast } from '../providers/ToastProvider.jsx';
 
 export default function useMediaKeys() {
   const { play, pause, playbackState, setVolume, toggleMute, previousChannel, nextChannel } = usePlayerStore();
-  const togglePlay = () => playbackState === 'playing' ? pause() : play();
+  const togglePlay = useCallback(() => playbackState === 'playing' ? pause() : play(), [playbackState, play, pause]);
   const { showToast } = useToast();
 
   useEffect(() => {
