@@ -75,7 +75,7 @@ export const useProfilesStore = create(
 					name: (name || '').trim() || 'New Profile',
 					playlists: [],
 					favorites: [],
-					recentlyWatched: [],
+					watchHistory: [],
 					settings: { ...DEFAULT_SETTINGS },
 				}
 				set((state) => ({
@@ -151,44 +151,55 @@ export const useProfilesStore = create(
 				})
 			},
 
-			addRecentlyWatched: (channelId) => {
+			updateWatchHistory: (channelId, durationSeconds = 0) => {
 				set((state) => {
 					const active = state.activeProfileId;
 					if (!active) return {};
 					const profile = state.profiles[active];
-					let recent = profile.recentlyWatched || [];
+					const history = profile.watchHistory || [];
 					
-					// Remove duplicate if exists (checking both old string format and new object format)
-					const existingItem = recent.find(item => 
-						(typeof item === 'string' && item === channelId) || 
-						(typeof item === 'object' && item.channelId === channelId)
-					);
+					const existingIdx = history.findIndex(item => item.channelId === channelId);
 					
-					recent = recent.filter(item => 
-						typeof item === 'string' ? item !== channelId : item.channelId !== channelId
-					);
+					let updatedHistory = [...history];
+					const now = Date.now();
 					
-					const watchDuration = existingItem && typeof existingItem === 'object' ? existingItem.watchDuration : 0;
-
-					const newItem = {
-						channelId,
-						timestamp: Date.now(),
-						watchDuration // This could be updated periodically by a player effect
-					};
-					
-					// Add to front and limit to 20
-					recent = [newItem, ...recent].slice(0, 20);
+					if (existingIdx >= 0) {
+						const current = updatedHistory[existingIdx];
+						const newSessions = current.sessions + 1;
+						const newTotalSeconds = (current.totalWatchSeconds || 0) + durationSeconds;
+						updatedHistory[existingIdx] = {
+							...current,
+							lastWatchedAt: now,
+							totalWatchSeconds: newTotalSeconds,
+							sessions: newSessions,
+							averageSessionSeconds: newSessions > 0 ? Math.floor(newTotalSeconds / newSessions) : 0
+						};
+					} else {
+						updatedHistory.push({
+							channelId,
+							firstWatchedAt: now,
+							lastWatchedAt: now,
+							totalWatchSeconds: durationSeconds,
+							sessions: 1,
+							averageSessionSeconds: durationSeconds
+						});
+					}
 					
 					return {
 						profiles: {
 							...state.profiles,
 							[active]: { 
 								...profile, 
-								recentlyWatched: recent 
+								watchHistory: updatedHistory 
 							},
 						},
 					};
 				});
+			},
+
+			addRecentlyWatched: (channelId) => {
+				// Wrapper for backward compatibility, treats as 0 duration new session
+				get().updateWatchHistory(channelId, 0);
 			},
 
 			// Keep addPlaylist wrapper for backward compatibility
@@ -347,15 +358,33 @@ export const useProfilesStore = create(
 						if (!updatedProfiles[id].favorites) {
 							updatedProfiles[id].favorites = [];
 						}
-						// Migrate recentlyWatched strings to objects
-						if (updatedProfiles[id].recentlyWatched && updatedProfiles[id].recentlyWatched.length > 0) {
-							updatedProfiles[id].recentlyWatched = updatedProfiles[id].recentlyWatched.map(item => {
-								if (typeof item === 'string') {
-									return { channelId: item, timestamp: Date.now(), watchDuration: 0 };
-								}
-								return item;
-							});
+						// Migrate recentlyWatched to watchHistory
+						if (!updatedProfiles[id].watchHistory) {
+							updatedProfiles[id].watchHistory = [];
 						}
+						
+						if (updatedProfiles[id].recentlyWatched && updatedProfiles[id].recentlyWatched.length > 0) {
+							updatedProfiles[id].recentlyWatched.forEach(item => {
+								const channelId = typeof item === 'string' ? item : item.channelId;
+								const timestamp = typeof item === 'object' && item.timestamp ? item.timestamp : Date.now();
+								const duration = typeof item === 'object' && item.watchDuration ? item.watchDuration : 0;
+								
+								// Check if already in watchHistory
+								if (!updatedProfiles[id].watchHistory.some(h => h.channelId === channelId)) {
+									updatedProfiles[id].watchHistory.push({
+										channelId,
+										firstWatchedAt: timestamp,
+										lastWatchedAt: timestamp,
+										totalWatchSeconds: duration,
+										sessions: 1,
+										averageSessionSeconds: duration
+									});
+								}
+							});
+							// clean up old array
+							delete updatedProfiles[id].recentlyWatched;
+						}
+						
 						if (updatedProfiles[id].playlists && updatedProfiles[id].playlists.length > 0) {
 							const migratedPlaylists = updatedProfiles[id].playlists.map((p, idx) => {
 								if (typeof p === 'string') {

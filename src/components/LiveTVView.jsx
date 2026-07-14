@@ -6,6 +6,12 @@ import { usePlayerStore } from '../player/playerStore.js';
 import FavoritesRail from './favorites/FavoritesRail.jsx';
 import EPGOverlay from './epg/EPGOverlay.jsx';
 import { useTVNavigation } from '../hooks/useTVNavigation.js';
+import ContinueWatchingRail from './tv/ContinueWatchingRail.jsx';
+import RecommendedRail from './tv/RecommendedRail.jsx';
+import CategoryRail from './tv/CategoryRail.jsx';
+import { rankContinueWatching, getRecommendedChannels } from '../lib/tv/channelRanking.js';
+import { TV_CATEGORIES, getChannelsByCategory } from '../lib/tv/channelCategories.js';
+import { useChannelInput } from '../hooks/useChannelInput.js';
 
 export default function LiveTVView() {
   const channels = useAppStore((s) => s.channels);
@@ -27,6 +33,7 @@ export default function LiveTVView() {
   const addRecentlyWatched = useProfilesStore((s) => s.addRecentlyWatched);
   
   const favorites = activeProfile?.favorites || [];
+  const watchHistory = activeProfile?.watchHistory || [];
   const recentlyWatchedItems = activeProfile?.recentlyWatched || [];
   
   const { activeUrl, setChannel, setPlaylist, playlist, activeChannel } = usePlayerStore();
@@ -43,6 +50,9 @@ export default function LiveTVView() {
     isActive: !isGuideOpen && !isLoadingPlaylist && channels.length > 0,
     onGuideOpen: () => setIsGuideOpen(true)
   });
+
+  // Channel number entry and switching
+  useChannelInput(!isGuideOpen && !isLoadingPlaylist && channels.length > 0);
 
   // Filtering for All Channels list
   const filteredChannels = useMemo(() => {
@@ -79,19 +89,37 @@ export default function LiveTVView() {
     return <EmptyState icon={<LucideTv />} title="No Channels Available" subtitle="Go to Settings > Sources to add an M3U playlist." />;
   }
 
-  // RECENTLY WATCHED PROCESSING
-  // Ensure we map back to the channel object properly based on the new data model
-  const recentlyWatchedChannels = recentlyWatchedItems.map(item => {
-    // backward compatibility for string IDs
-    const id = typeof item === 'string' ? item : item.channelId;
-    const channel = channels.find(c => c.id === id);
-    if (!channel) return null;
-    return {
-      channel,
-      timestamp: item.timestamp || Date.now(),
-      watchDuration: item.watchDuration || 0
-    };
-  }).filter(Boolean);
+  // NEW RANKING AND INTELLIGENCE
+  const continueWatching = useMemo(() => {
+    const historyToUse = watchHistory.length > 0 ? watchHistory : recentlyWatchedItems;
+    return rankContinueWatching(historyToUse, channels);
+  }, [watchHistory, recentlyWatchedItems, channels]);
+
+  const recommendedChannels = useMemo(() => {
+    const historyToUse = watchHistory.length > 0 ? watchHistory : recentlyWatchedItems;
+    return getRecommendedChannels(channels, historyToUse, favorites);
+  }, [channels, watchHistory, recentlyWatchedItems, favorites]);
+
+  // Pre-calculate some category rails
+  const sportsChannels = useMemo(() => getChannelsByCategory(channels, TV_CATEGORIES.SPORTS), [channels]);
+  const newsChannels = useMemo(() => getChannelsByCategory(channels, TV_CATEGORIES.NEWS), [channels]);
+  const moviesChannels = useMemo(() => getChannelsByCategory(channels, TV_CATEGORIES.MOVIES), [channels]);
+
+  // Chronological recently watched for the old rail
+  const chronologicalHistory = useMemo(() => {
+    const historyToUse = watchHistory.length > 0 ? watchHistory : recentlyWatchedItems;
+    return [...historyToUse]
+      .sort((a, b) => (b.lastWatchedAt || b.timestamp || 0) - (a.lastWatchedAt || a.timestamp || 0))
+      .map(item => {
+        const id = typeof item === 'string' ? item : (item.channelId || item.id);
+        return {
+          channel: channels.find(c => c.id === id),
+          timestamp: item.lastWatchedAt || item.timestamp || Date.now(),
+          watchDuration: item.totalWatchSeconds || item.watchDuration || 0
+        };
+      })
+      .filter(x => x.channel);
+  }, [watchHistory, recentlyWatchedItems, channels]);
 
   return (
     <div className="flex flex-col h-full w-full bg-transparent overflow-y-auto no-scrollbar relative z-10 scroll-smooth">
@@ -147,45 +175,67 @@ export default function LiveTVView() {
       {/* ── HOME LAYOUT SECTIONS ── */}
       <div className="w-full min-h-[40vh] bg-[#050c0e] flex flex-col pb-20 relative z-20 shadow-[0_-20px_50px_rgba(0,0,0,0.8)]">
         
-        {/* RECENTLY WATCHED / CONTINUE WATCHING */}
+        {/* CONTINUE WATCHING */}
         <div className="mt-8">
           <h2 className="text-2xl font-bold text-white px-8 mb-2 tracking-tight">Continue Watching</h2>
-          {recentlyWatchedChannels.length > 0 ? (
-            <div className="flex overflow-x-auto no-scrollbar scroll-smooth gap-4 px-8 pb-4 pt-2">
-              {recentlyWatchedChannels.map(({channel, timestamp}, idx) => (
+          <ContinueWatchingRail historyItems={continueWatching} onPlay={handlePlayChannel} />
+        </div>
+
+        {/* BECAUSE YOU WATCH */}
+        {recommendedChannels.length > 0 && (
+          <div className="mt-8">
+            <h2 className="text-2xl font-bold text-white px-8 mb-2 tracking-tight">Because You Watch</h2>
+            <RecommendedRail channels={recommendedChannels} onPlay={handlePlayChannel} />
+          </div>
+        )}
+
+        {/* CATEGORY RAILS */}
+        {sportsChannels.length > 0 && (
+          <CategoryRail title="Sports" channels={sportsChannels} onPlay={handlePlayChannel} />
+        )}
+        {moviesChannels.length > 0 && (
+          <CategoryRail title="Movies" channels={moviesChannels} onPlay={handlePlayChannel} />
+        )}
+        {newsChannels.length > 0 && (
+          <CategoryRail title="News" channels={newsChannels} onPlay={handlePlayChannel} />
+        )}
+
+        {/* FAVORITES */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold text-white px-8 mb-2 tracking-tight">Favorites</h2>
+          <FavoritesRail channels={channels} favorites={favorites} onPlay={handlePlayChannel} />
+        </div>
+
+        {/* RECENTLY WATCHED */}
+        <div className="mt-8">
+          <h2 className="text-xl font-bold text-gray-400 px-8 mb-2 tracking-tight">Recently Watched</h2>
+           {chronologicalHistory.length > 0 ? (
+            <div className="flex overflow-x-auto no-scrollbar scroll-smooth gap-4 px-8 pb-4 pt-2 opacity-70">
+              {chronologicalHistory.map(({channel, timestamp}, idx) => (
                 <button
                   key={idx}
                   data-tv-focusable="true"
                   onClick={() => handlePlayChannel(channel)}
-                  className="group relative flex-shrink-0 w-64 h-36 rounded-xl overflow-hidden bg-white/5 border border-transparent transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 focus:z-10 focus:border-white/20 text-left hover:bg-white/10"
+                  className="group relative flex-shrink-0 w-48 h-24 rounded-lg overflow-hidden bg-white/5 border border-transparent transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 focus:z-10 focus:border-white/20 text-left hover:bg-white/10"
                 >
                   <div className="absolute inset-0 flex items-center justify-center p-4">
                      {channel.logo ? (
                        <img src={channel.logo} className="w-full h-full object-contain opacity-40 group-focus:opacity-100 group-hover:opacity-100 transition-opacity" />
                      ) : (
-                       <LucideImageOff size={48} className="text-gray-700 opacity-50" />
+                       <LucideImageOff size={32} className="text-gray-700 opacity-50" />
                      )}
                   </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent p-4 flex flex-col justify-end">
-                    <h4 className="text-white font-bold truncate text-lg drop-shadow-md">{channel.name}</h4>
-                    <p className="text-xs text-gray-400 truncate">
-                      {new Date(timestamp).toLocaleDateString()}
-                    </p>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent p-3 flex flex-col justify-end">
+                    <h4 className="text-white font-bold truncate text-sm drop-shadow-md">{channel.name}</h4>
                   </div>
                 </button>
               ))}
             </div>
           ) : (
-             <div className="px-8 py-6 text-gray-500 italic text-sm">
-                Start watching channels. Your history will appear here.
+             <div className="px-8 py-2 text-gray-500 italic text-sm">
+                No recent channels.
              </div>
           )}
-        </div>
-
-        {/* FAVORITES */}
-        <div className="mt-4">
-          <h2 className="text-2xl font-bold text-white px-8 mb-2 tracking-tight">Favorites</h2>
-          <FavoritesRail channels={channels} favorites={favorites} onPlay={handlePlayChannel} />
         </div>
 
         {/* ALL CHANNELS (CATEGORIES & VIRTUALIZED LIST) */}
