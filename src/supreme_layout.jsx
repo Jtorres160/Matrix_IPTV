@@ -59,6 +59,19 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('matrix_last_view', currentView);
+
+    if (currentView === 'player') {
+      try {
+        performance.measure("player-switch", "player-mode-enter");
+        const entry = performance.getEntriesByName("player-switch").pop();
+        if (entry) {
+          console.log(`[Performance] Switch to Player Mode: ${entry.duration.toFixed(2)}ms`);
+          if (window.electronLog) window.electronLog.write('info', `[Performance] [player-switch] ${entry.duration.toFixed(2)}ms`);
+        }
+      } catch (e) {
+        // mark might not exist on direct launch
+      }
+    }
   }, [currentView]);
 
   useEffect(() => {
@@ -214,41 +227,48 @@ export default function App() {
     <div className={`relative w-screen h-screen overflow-hidden font-sans ${darkMode ? "bg-[#0a1f22] text-gray-100" : "bg-gray-100 text-gray-900"}`}>
       
       {/* LAYER 0: Background Player */}
-      <div className="absolute inset-0 z-0 bg-black">
+      <div className={`absolute inset-0 bg-black ${currentView === 'player' ? 'z-50' : 'z-0'}`}>
         <PlayerPreview playerPreference={playerPreference} />
       </div>
 
-      {/* Layer 1 (z-10): Active View Routing */}
-      <div className="absolute inset-0 z-10 pointer-events-auto">
-        <ViewRouter />
-      </div>
-
-      {/* Layer 2 (z-20): Navigation */}
-      <div className="absolute inset-0 z-20 pointer-events-none">
-        <div className="pointer-events-auto">
-          <Sidebar activeZone="sidebar" onSelect={(id) => {
-            if (id === 'settings') setIsSettingsOpen(true);
-            else setCurrentView(id);
-          }} />
+      <div 
+        className={`absolute inset-0 transition-opacity duration-300 ${
+          currentView === 'player' ? 'opacity-0 pointer-events-none' : 'opacity-100'
+        }`}
+        aria-hidden={currentView === 'player'}
+      >
+        {/* Layer 1 (z-10): Active View Routing */}
+        <div className="absolute inset-0 z-10 pointer-events-auto">
+          <ViewRouter />
         </div>
-        <div className="pointer-events-auto">
-          <BottomNavigationBar currentView={currentView} onSelect={(id) => {
-            if (id === 'settings') setIsSettingsOpen(true);
-            else setCurrentView(id);
-          }} />
+
+        {/* Layer 2 (z-20): Navigation */}
+        <div className="absolute inset-0 z-20 pointer-events-none">
+          <div className="pointer-events-auto">
+            <Sidebar activeZone="sidebar" onSelect={(id) => {
+              if (id === 'settings') setIsSettingsOpen(true);
+              else setCurrentView(id);
+            }} />
+          </div>
+          <div className="pointer-events-auto">
+            <BottomNavigationBar currentView={currentView} onSelect={(id) => {
+              if (id === 'settings') setIsSettingsOpen(true);
+              else setCurrentView(id);
+            }} />
+          </div>
         </div>
-      </div>
 
-      {/* Layer 2.5: Global Loader */}
-      <GlobalLoader isLoading={isLoadingPlaylist || isLoadingEpg} />
+        {/* Layer 2.5: Global Loader */}
+        <GlobalLoader isLoading={isLoadingPlaylist || isLoadingEpg} />
 
-      {/* Layer 3 (z-30): Overlays */}
-      <div className="absolute inset-0 z-30 pointer-events-none">
-        <div className="pointer-events-auto">
-          <SettingsDrawer
-            isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
-          />
+        {/* Layer 3 (z-30): Overlays */}
+        <div className="absolute inset-0 z-30 pointer-events-none">
+          <div className="pointer-events-auto">
+            <SettingsDrawer
+              isOpen={isSettingsOpen}
+              onClose={() => setIsSettingsOpen(false)}
+            />
+          </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import LiveTVView from './LiveTVView.jsx';
 import VODLibrary from './VODLibrary.jsx';
 import { useAppStore } from '../store/appStore';
@@ -8,7 +8,7 @@ import SourceManagerView from './SourceManagerView.jsx';
 const ROUTES = {
   'live-tv': (props) => (
     <div className="w-full h-full bg-black/40 backdrop-blur-sm pl-0 md:pl-[260px] pb-16 md:pb-0 transition-all duration-300">
-      <LiveTVView />
+      <LiveTVView isActive={props.isActive} />
     </div>
   ),
   'movies': (props) => (
@@ -25,8 +25,7 @@ const ROUTES = {
     <div className="w-full h-full bg-[#0a1f22]/90 pl-0 md:pl-[260px] pb-16 md:pb-0 transition-all duration-300 overflow-y-auto">
       <SourceManagerView />
     </div>
-  ),
-  'player': () => null
+  )
 };
 
 export default function ViewRouter({ onPlayStream }) {
@@ -34,11 +33,22 @@ export default function ViewRouter({ onPlayStream }) {
   const channels = useAppStore((s) => s.channels);
   const epgData = useAppStore((s) => s.epgData);
 
-  const RouteComponent = ROUTES[currentView];
+  const lastViewRef = useRef(currentView === 'player' ? 'live-tv' : currentView);
+
+  useEffect(() => {
+    if (currentView !== "player") {
+      lastViewRef.current = currentView;
+    }
+  }, [currentView]);
+
+  const activeRoute = lastViewRef.current;
+  const RouteComponent = ROUTES[activeRoute];
   
   if (!RouteComponent) {
     return null;
   }
 
-  return <RouteComponent channels={channels} epgData={epgData} onPlayStream={onPlayStream} />;
+  const isActive = currentView !== 'player';
+
+  return <RouteComponent channels={channels} epgData={epgData} onPlayStream={onPlayStream} isActive={isActive} />;
 }

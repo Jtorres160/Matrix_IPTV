@@ -1,6 +1,7 @@
 import React from 'react';
-import { LucideMaximize, LucideMinimize, LucideVolume2, LucideVolumeX, LucidePause, LucidePlay, LucideSettings } from 'lucide-react';
+import { LucideMaximize, LucideMinimize, LucideVolume2, LucideVolumeX, LucidePause, LucidePlay, LucideSettings, LucideArrowLeft } from 'lucide-react';
 import { usePlayerStore } from '../../player/playerStore.js';
+import { useAppStore } from '../../store/appStore.js';
 
 export default function PlayerControls() {
   const { 
@@ -17,6 +18,14 @@ export default function PlayerControls() {
     toggleMute,
     showControlsTemporarily
   } = usePlayerStore();
+  const setCurrentView = useAppStore(s => s.setCurrentView);
+
+  const handleBack = () => {
+    if (isFullscreen) {
+      toggleFullscreen();
+    }
+    setCurrentView('live-tv');
+  };
 
   if (!showControls || !activeChannel) return null;
 
@@ -30,8 +39,17 @@ export default function PlayerControls() {
       {/* TOP GRADIENT / HEADER */}
       <div className="w-full bg-gradient-to-b from-black/80 to-transparent p-6 flex justify-between items-start pointer-events-auto">
         <div className="flex flex-col">
-          <h2 className="text-2xl font-bold text-white drop-shadow-md">{activeChannel.name}</h2>
-          <span className="text-gray-300 text-sm font-medium drop-shadow-md">
+          <div className="flex items-center gap-4 mb-2">
+            <button 
+              onClick={handleBack} 
+              className="p-2 -ml-2 rounded-full hover:bg-white/20 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              title="Back to Live TV"
+            >
+              <LucideArrowLeft size={24} />
+            </button>
+            <h2 className="text-2xl font-bold text-white drop-shadow-md">{activeChannel.name}</h2>
+          </div>
+          <span className="text-gray-300 text-sm font-medium drop-shadow-md ml-12">
             {activeChannel.groups?.[0] || 'Unknown Category'}
           </span>
         </div>

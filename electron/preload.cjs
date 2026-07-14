@@ -63,4 +63,10 @@ contextBridge.exposeInMainWorld('electronDB', {
   }
 });
 
+// Expose logger
+contextBridge.exposeInMainWorld('electronLog', {
+  write: (level, message, errorObj = null) => ipcRenderer.invoke('log:write', level, message, errorObj),
+  logMemory: (context) => ipcRenderer.invoke('log:memory', context)
+});
+
 // Removed the extra '}' from here

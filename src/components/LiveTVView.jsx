@@ -15,7 +15,11 @@ import { useChannelInput } from '../hooks/useChannelInput.js';
 import { useWatchSession } from '../hooks/useWatchSession.js';
 import { useTVBackNavigation } from '../hooks/useTVBackNavigation.js';
 
-export default function LiveTVView() {
+export default function LiveTVView({ isActive = true }) {
+  useEffect(() => {
+    console.log("[LiveTVView] MOUNTED");
+    return () => console.log("[LiveTVView] UNMOUNTED");
+  }, []);
   const channels = useAppStore((s) => s.channels);
   const categories = useAppStore((s) => s.categories);
   const epgData = useAppStore((s) => s.epgData);
@@ -50,12 +54,12 @@ export default function LiveTVView() {
 
   // Remote-first TV navigation for the main view
   useTVNavigation({
-    isActive: !isGuideOpen && !isLoadingPlaylist && channels.length > 0,
+    isActive: isActive && !isGuideOpen && !isLoadingPlaylist && channels.length > 0,
     onGuideOpen: () => setIsGuideOpen(true)
   });
 
   // Channel number entry and switching
-  useChannelInput(!isGuideOpen && !isLoadingPlaylist && channels.length > 0);
+  useChannelInput(isActive && !isGuideOpen && !isLoadingPlaylist && channels.length > 0);
   
   // Session tracking
   useWatchSession();
@@ -87,40 +91,13 @@ export default function LiveTVView() {
   };
 
   const handlePlayChannel = (channel) => {
+    performance.mark("player-mode-enter");
+    performance.mark("channel-change-start");
     setSelectedChannel(channel);
     addRecentlyWatched(channel.id);
     setChannel(channel);
+    setCurrentView('player');
   };
-
-  // EMPTY STATES
-  if (isLoadingPlaylist) {
-    return <EmptyState icon={<LucideTv className="animate-pulse" />} title="Loading Channels" subtitle="Please wait while we parse your media sources..." />;
-  }
-
-  if (channels.length === 0) {
-    const mainPlaylist = activeProfile?.playlists?.[0];
-    const isFailed = mainPlaylist && mainPlaylist.status === 'failed';
-    
-    if (isFailed) {
-       return (
-         <div className="flex flex-col items-center justify-center h-full w-full bg-[#050c0e] text-center p-8 z-20 relative">
-           <div className="w-24 h-24 bg-red-900/10 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-inner border border-red-900/30">
-             <LucideTv size={48} />
-           </div>
-           <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">No channels available</h2>
-           <p className="text-gray-400 max-w-md mb-6">Your playlist failed to load. {mainPlaylist.lastError ? `(${mainPlaylist.lastError})` : ''}</p>
-           <button 
-             onClick={() => setCurrentView('playlists')} 
-             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-all shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-500"
-           >
-             Manage Playlist
-           </button>
-         </div>
-       );
-    }
-    
-    return <EmptyState icon={<LucideTv />} title="No Channels Available" subtitle="Go to Settings > Sources to add an M3U playlist." />;
-  }
 
   // NEW RANKING AND INTELLIGENCE
   const continueWatching = useMemo(() => {
@@ -153,6 +130,38 @@ export default function LiveTVView() {
       })
       .filter(x => x.channel);
   }, [watchHistory, recentlyWatchedItems, channels]);
+
+  // EMPTY STATES
+  if (isLoadingPlaylist) {
+    return <EmptyState icon={<LucideTv className="animate-pulse" />} title="Loading Channels" subtitle="Please wait while we parse your media sources..." />;
+  }
+
+  if (channels.length === 0) {
+    const mainPlaylist = activeProfile?.playlists?.[0];
+    const isFailed = mainPlaylist && mainPlaylist.status === 'failed';
+    
+    if (isFailed) {
+       return (
+         <div className="flex flex-col items-center justify-center h-full w-full bg-[#050c0e] text-center p-8 z-20 relative">
+           <div className="w-24 h-24 bg-red-900/10 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-inner border border-red-900/30">
+             <LucideTv size={48} />
+           </div>
+           <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">No channels available</h2>
+           <p className="text-gray-400 max-w-md mb-6">Your playlist failed to load. {mainPlaylist.lastError ? `(${mainPlaylist.lastError})` : ''}</p>
+           <button 
+             onClick={() => setCurrentView('playlists')} 
+             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-all shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-500"
+           >
+             Manage Playlist
+           </button>
+         </div>
+       );
+    }
+    
+    return <EmptyState icon={<LucideTv />} title="No Channels Available" subtitle="Go to Settings > Sources to add an M3U playlist." />;
+  }
+
+
 
   return (
     <div className="flex flex-col h-full w-full bg-transparent overflow-y-auto no-scrollbar relative z-10 scroll-smooth">
@@ -290,6 +299,7 @@ export default function LiveTVView() {
                  favorites={favorites}
                  onToggleFavorite={toggleFavorite}
                  getEpgForChannel={getEpgForChannel}
+                 isActive={isActive}
                />
              ) : (
                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
@@ -357,13 +367,14 @@ function CategoryRibbon({ categories, activeCategory, setActiveCategory }) {
 }
 
 // Custom Virtualizer for full window scrolling compatibility
-function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onToggleFavorite, getEpgForChannel }) {
+function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onToggleFavorite, getEpgForChannel, isActive }) {
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600); // Default assumption for the block
   const containerRef = useRef(null);
 
   useEffect(() => {
     const handleScroll = () => {
+      if (!isActive) return;
       if (containerRef.current) {
         // Calculate the scroll position relative to the container
         const rect = containerRef.current.getBoundingClientRect();
@@ -380,7 +391,7 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
       parent.addEventListener('scroll', handleScroll, { passive: true });
       return () => parent.removeEventListener('scroll', handleScroll);
     }
-  }, []);
+  }, [isActive]);
 
   const ITEM_HEIGHT = 80; 
   const totalHeight = channels.length * ITEM_HEIGHT;

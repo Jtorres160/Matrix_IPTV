@@ -6,11 +6,36 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
+const logger = require('./logger.cjs');
 
 // ── Phase 7: SQLite Database Layer ───────────────────────────────────────────
 const { initDatabase, closeDatabase, cleanupExpiredEPG } = require('./db.cjs');
 const { registerIPCHandlers, setMainWindow } = require('./ipcHandlers.cjs');
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Global Error Catching
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception', error);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Promise Rejection', reason);
+});
+
+app.on('render-process-gone', (event, webContents, details) => {
+  logger.error('Render Process Gone', details);
+});
+app.on('child-process-gone', (event, details) => {
+  logger.error('Child Process Gone', details);
+});
+
+ipcMain.handle('log:write', (event, level, message, errorObj) => {
+  if (logger[level]) {
+    logger[level](message, errorObj);
+  }
+});
+ipcMain.handle('log:memory', (event, context) => {
+  logger.logMemory(context);
+});
 
 let mainWindow;
 let vlcProcess = null;
@@ -340,6 +365,9 @@ function getVLCPath() {
 
 // Initialize app
 app.whenReady().then(async () => {
+  logger.info('APP_START');
+  logger.logMemory('Startup Memory');
+  
   await initStore(); // Initialize store before creating window
 
   // ── Phase 7: Initialize SQLite database ─────────────────────────────────
@@ -350,6 +378,7 @@ app.whenReady().then(async () => {
     console.log('[Main] SQLite database initialized and EPG cleanup complete.');
   } catch (err) {
     console.error('[Main] Failed to initialize SQLite database:', err);
+    logger.error('Failed to initialize SQLite database', err);
   }
   // ────────────────────────────────────────────────────────────────────────
 
@@ -360,6 +389,8 @@ app.whenReady().then(async () => {
     registerIPCHandlers(mainWindow);
   }
   // ────────────────────────────────────────────────────────────────────────
+  
+  logger.info('APP_READY');
 });
 app.on('window-all-closed', () => {
   if (vlcProcess) {
@@ -375,6 +406,7 @@ app.on('activate', () => {
   }
 });
 app.on('before-quit', () => {
+  logger.info('APP_QUIT');
   if (vlcProcess) {
     vlcProcess.kill();
   }

@@ -4,6 +4,7 @@ import { usePlayerStore } from '../player/playerStore.js';
 import PlayerControls from './player/PlayerControls.jsx';
 import PlayerStatus from './player/PlayerStatus.jsx';
 import PlayerOverlay from './player/PlayerOverlay.jsx';
+import { useAppStore } from '../store/appStore.js';
 
 export default function PlayerPreview({ playerPreference }) {
   const containerRef = useRef(null);
@@ -36,12 +37,35 @@ export default function PlayerPreview({ playerPreference }) {
 
   // Initial setup / VLC check
   useEffect(() => {
+    if (window.electronLog) window.electronLog.write('info', '[PlayerPreview] PLAYER_INIT / MOUNTED');
+    console.log("[PlayerPreview] MOUNTED");
+    
     if (window.electronVLC) {
       window.electronVLC.check().then(result => {
         setVlcAvailable(result.available);
       }).catch(console.error);
     }
+    
+    return () => {
+      if (window.electronLog) window.electronLog.write('info', '[PlayerPreview] PLAYER_CLEANUP / UNMOUNTED');
+      console.log("[PlayerPreview] UNMOUNTED");
+    };
   }, []);
+
+  const prevChannelRef = useRef(null);
+  useEffect(() => {
+    if (activeChannel) {
+      if (window.electronLog) {
+        window.electronLog.write('info', 'PLAYER_INIT / STREAM_CHANGE', {
+          previousChannel: prevChannelRef.current?.name || null,
+          newChannel: activeChannel.name,
+          urlChange: activeUrl
+        });
+        window.electronLog.logMemory('entering player or after channel switch');
+      }
+      prevChannelRef.current = activeChannel;
+    }
+  }, [activeChannel, activeUrl]);
 
   // Sync state to native fullscreen API
   useEffect(() => {
@@ -136,9 +160,16 @@ export default function PlayerPreview({ playerPreference }) {
           nextChannel();
           break;
         case 'escape':
+        case 'backspace':
           if (isFullscreen) {
             // Browser handles exiting native fullscreen, but we sync state
             setFullscreen(false);
+          } else {
+            // If windowed, go back to Live TV
+            const currentView = useAppStore.getState().currentView;
+            if (currentView === 'player') {
+              useAppStore.getState().setCurrentView('live-tv');
+            }
           }
           break;
         case 't':
@@ -241,12 +272,26 @@ export default function PlayerPreview({ playerPreference }) {
             playing={playbackState === 'playing' || playbackState === 'buffering'}
             volume={volume}
             muted={muted}
-            onReady={() => setPlaybackState('playing')}
+            onReady={() => {
+              if (window.electronLog) window.electronLog.write('info', `[PlayerPreview] Video Ready / HLS Initialized for: ${activeUrl}`);
+              console.log(`[PlayerPreview] Video Ready / HLS Initialized for: ${activeUrl}`);
+              setPlaybackState('playing');
+              try { 
+                performance.measure("channel-change", "channel-change-start"); 
+                const entry = performance.getEntriesByName("channel-change").pop();
+                if (entry && window.electronLog) {
+                  window.electronLog.write('info', `[Performance] [channel-change] ${entry.duration.toFixed(2)}ms`);
+                }
+              } catch (e) {}
+            }}
             onPlay={() => setPlaybackState('playing')}
             onPause={() => setPlaybackState('paused')}
             onBuffer={() => setPlaybackState('buffering')}
             onBufferEnd={() => setPlaybackState('playing')}
-            onError={handleError}
+            onError={(e) => {
+              if (window.electronLog) window.electronLog.write('error', 'VIDEO_ERROR (ReactPlayer)', e);
+              handleError();
+            }}
             config={{
               file: {
                 forceVideo: true,
