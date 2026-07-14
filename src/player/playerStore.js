@@ -103,6 +103,8 @@ export const usePlayerStore = create((set, get) => ({
   handleError: () => {
     const { retryCount, activeUrl } = get();
     
+    if (retryTimeout) clearTimeout(retryTimeout);
+    
     if (retryCount === 0) {
       set({ playbackState: 'error', errorInfo: 'Retrying... (1/2)', retryCount: 1 });
       retryTimeout = setTimeout(() => {

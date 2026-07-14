@@ -26,6 +26,14 @@ export function useWatchSession() {
     if (!sessionRef.current || sessionRef.current.channelId !== channelId) {
       // Finalize previous session if exists
       if (sessionRef.current && sessionRef.current.channelId) {
+        if (sessionRef.current.lastTick) {
+          const now = Date.now();
+          const deltaSeconds = Math.floor((now - sessionRef.current.lastTick) / 1000);
+          if (deltaSeconds > 0) {
+            sessionRef.current.accumulatedSeconds += deltaSeconds;
+            updateWatchHistory(sessionRef.current.channelId, deltaSeconds);
+          }
+        }
         analytics.track(tvEvents.WATCH_SESSION_END, { channelId: sessionRef.current.channelId });
       }
 
@@ -66,6 +74,16 @@ export function useWatchSession() {
   useEffect(() => {
     return () => {
       if (sessionRef.current && sessionRef.current.channelId) {
+        if (sessionRef.current.lastTick) {
+          const now = Date.now();
+          const deltaSeconds = Math.floor((now - sessionRef.current.lastTick) / 1000);
+          if (deltaSeconds > 0) {
+            sessionRef.current.accumulatedSeconds += deltaSeconds;
+            // updateWatchHistory might be stale here if we don't use the latest ref,
+            // but for unmount it's usually acceptable as Zustand store methods are stable.
+            useProfilesStore.getState().updateWatchHistory(sessionRef.current.channelId, deltaSeconds);
+          }
+        }
         analytics.track(tvEvents.WATCH_SESSION_END, { channelId: sessionRef.current.channelId });
         sessionRef.current = null;
       }

@@ -61,6 +61,28 @@ export default function PlayerPreview({ playerPreference }) {
     }
   }, [isFullscreen]);
 
+  // Store state in a ref to avoid re-binding keyboard listeners on every state change
+  const stateRef = useRef({
+    activeChannel, playbackState, isFullscreen, volume,
+    play, pause, toggleFullscreen, toggleMute, setVolume,
+    showControlsTemporarily, setFullscreen, toggleTheater,
+    previousChannel, nextChannel
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      activeChannel, playbackState, isFullscreen, volume,
+      play, pause, toggleFullscreen, toggleMute, setVolume,
+      showControlsTemporarily, setFullscreen, toggleTheater,
+      previousChannel, nextChannel
+    };
+  }, [
+    activeChannel, playbackState, isFullscreen, volume,
+    play, pause, toggleFullscreen, toggleMute, setVolume,
+    showControlsTemporarily, setFullscreen, toggleTheater,
+    previousChannel, nextChannel
+  ]);
+
   // Keyboard Shortcuts Engine
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -69,6 +91,13 @@ export default function PlayerPreview({ playerPreference }) {
       if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement.isContentEditable) {
         return;
       }
+
+      const {
+        activeChannel, playbackState, isFullscreen, volume,
+        play, pause, toggleFullscreen, toggleMute, setVolume,
+        showControlsTemporarily, setFullscreen, toggleTheater,
+        previousChannel, nextChannel
+      } = stateRef.current;
 
       // Ignore if no active channel (we shouldn't steal keys when idle)
       if (!activeChannel) return;
@@ -123,12 +152,7 @@ export default function PlayerPreview({ playerPreference }) {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    activeChannel, playbackState, isFullscreen, volume,
-    play, pause, toggleFullscreen, toggleMute, setVolume,
-    showControlsTemporarily, setFullscreen, toggleTheater,
-    previousChannel, nextChannel
-  ]);
+  }, []);
 
   // PiP Stub API
   const canPictureInPicture = () => document.pictureInPictureEnabled;
