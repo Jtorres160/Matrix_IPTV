@@ -4,8 +4,9 @@ import { useAppStore } from "./store/appStore.js";
 import { fetchAndParseEPG } from "./services/epgParser.js";
 import { loadPlaylist as fetchPlaylist } from "./lib/m3u/playlistService.js";
 import { getPlaylistFromCache, savePlaylistToCache } from "./lib/m3u/playlistCache.js";
-import { runChannelParityCheck } from "./lib/tv/dbChannelAdapter.js";
-import { DB_CHANNEL_PARITY } from "./config/featureFlags.js";
+import { runChannelParityCheck, loadDbChannels } from "./lib/tv/dbChannelAdapter.js";
+import { runIdentityBridgeDiagnostics } from "./lib/tv/identityBridge.js";
+import { DB_CHANNEL_PARITY, USE_DB_CHANNELS } from "./config/featureFlags.js";
 
 import BottomNavigationBar from "./components/BottomNavigationBar.jsx";
 import Sidebar from "./components/Sidebar.jsx";
@@ -187,17 +188,52 @@ export default function App() {
        if (typeof window !== 'undefined' && window.electronDB && playlist.id) {
          window.electronDB
            .syncPlaylist(playlist.id)
-           .then(() => {
-             // ── Phase 2.1: read-only parity diagnostics ──────────────────
-             // Observational ONLY. Compares the renderer channels (source of
-             // truth for the view, just set above) against what the SQLite
-             // adapter produces from the freshly-synced DB. Never changes the
-             // Live TV source, never mutates state, never throws.
+           .then(async () => {
+             // Channels currently in the store are the renderer-parsed set
+             // (set above). Track what the view is actually showing so the
+             // Phase 2.3 identity bridge reports against the live data.
+             let activeChannels = result.channels;
+
+             // ── Phase 2.2: optional DB-backed Live TV source ─────────────
+             // Flag OFF (default): no change — renderer channels stay the
+             // source of truth. Flag ON: swap appStore channels for the
+             // SQLite adapter output. The old path still ran (cache +
+             // playlist status), it is not disabled. On any DB load failure
+             // we keep the renderer channels — safe fallback.
+             if (USE_DB_CHANNELS) {
+               const dbLoad = await loadDbChannels(playlist.id);
+               if (dbLoad.success && dbLoad.channels.length > 0) {
+                 activeChannels = dbLoad.channels;
+                 setChannels(dbLoad.channels);
+                 setCategories(dbLoad.categories);
+                 console.info(`[Matrix_IPTV] Live TV hydrated from SQLite: ${dbLoad.channels.length} channels (USE_DB_CHANNELS=true).`);
+               } else {
+                 console.warn(`[Matrix_IPTV] USE_DB_CHANNELS=true but DB load unavailable (${dbLoad.reason || 'empty'}); keeping renderer channels.`);
+               }
+             }
+
+             // ── Phase 2.1: read-only parity diagnostics (observational) ──
              if (DB_CHANNEL_PARITY) {
                runChannelParityCheck({
                  rendererChannels: result.channels,
                  playlistId: playlist.id,
                }).catch(() => {});
+             }
+
+             // ── Phase 2.3: identity bridge diagnostics (observational) ───
+             // Reports how many stored favorites / watchHistory entries
+             // resolve against the live channel set. Read-only; never
+             // migrates storage, never throws.
+             try {
+               const profileNow = useProfilesStore.getState().getActiveProfile();
+               runIdentityBridgeDiagnostics({
+                 channels: activeChannels,
+                 favorites: profileNow?.favorites || [],
+                 watchHistory: profileNow?.watchHistory || [],
+                 mode: USE_DB_CHANNELS ? 'db' : 'renderer',
+               });
+             } catch (bridgeErr) {
+               console.error('[Matrix_IPTV] Identity bridge diagnostics failed (non-fatal):', bridgeErr);
              }
            })
            .catch((dbErr) => console.error('[Matrix_IPTV] Background SQLite resync failed (non-fatal):', dbErr));

@@ -50,6 +50,8 @@ import { logger } from '../logger.js';
  * @typedef {Object} AppStoreChannel
  * @property {number} dbId     SQLite row id — durable identity for Phase 2.3+
  * @property {string} id       Legacy `${name}-${idx}` id (temporary UI compat)
+ * @property {string} legacyId Explicit legacy identity (mirrors `id`) — the key
+ *                             existing favorites/watchHistory are stored under.
  * @property {string} name
  * @property {'LIVE'} status
  * @property {string} url
@@ -74,10 +76,12 @@ import { logger } from '../logger.js';
  * @returns {AppStoreChannel}
  */
 export function normalizeDbChannel(row, index) {
+  // Legacy, renderer-compatible id. Mirrors m3uParser: `${name}-${idx}`.
+  const legacyId = `${row.name}-${index}`;
   return {
     dbId: row.id,
-    // Legacy, renderer-compatible id. Mirrors m3uParser: `${name}-${idx}`.
-    id: `${row.name}-${index}`,
+    id: legacyId,
+    legacyId,
     name: row.name,
     status: 'LIVE',
     url: row.stream_url || '',
