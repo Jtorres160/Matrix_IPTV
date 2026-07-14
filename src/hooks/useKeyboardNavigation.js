@@ -1,63 +1,97 @@
 import { useEffect, useState, useRef } from 'react';
 
 /**
- * TV D-Pad Focus Simulation Hook
+ * TV D-Pad Keyboard Navigation Hook
  * 
- * Supports:
- * - ArrowUp / ArrowDown for vertical list navigation
- * - ArrowLeft / ArrowRight for horizontal list or zone transitions
- * - Enter to trigger clicks on focused items
- * - Escape / Backspace to go back to previous zones
- * - Scroll-into-view to ensure focused item is always visible
+ * Manages spatial focus shifting between UI zones and handles remote simulation
+ * using Arrow keys, Enter, and Escape/Backspace.
  * 
- * Elements registers by using HTML attributes:
- * - `data-nav-zone` matches the zone name (e.g. 'sidebar')
- * - `data-nav-index` 0-indexed number representing list order
- * - `data-nav-row` (optional) row number for grid layouts
- * - `data-nav-col` (optional) column number for grid layouts
- * 
- * @param {string} currentZone The active zone string
- * @param {Function} setCurrentZone State setter for the active zone
- * @param {Object} zonesConfig Mapping of transitions and types for each zone
- * @returns {Object} { focusIndices, setFocusIndex, getFocusIndex }
+ * @param {Object} options Configuration parameters
+ * @param {string} options.initialZone Starting interactive zone (e.g., 'channels')
+ * @param {Object} options.zonesConfig Custom transition mappings and zone types
+ * @param {Function} [options.onEnter] Callback triggered when Enter is pressed
+ * @param {Function} [options.onBack] Callback triggered when Escape/Backspace is pressed
  */
-export default function useKeyboardNavigation(currentZone, setCurrentZone, zonesConfig = {}) {
-  // Store the active index for each zone to preserve state when switching zones
-  const [focusIndices, setFocusIndices] = useState({});
-  
-  const currentZoneRef = useRef(currentZone);
-  const focusIndicesRef = useRef(focusIndices);
+export default function useKeyboardNavigation({
+  initialZone = 'channels',
+  zonesConfig = {},
+  onEnter = null,
+  onBack = null
+}) {
+  const [activeZone, setActiveZone] = useState(initialZone);
+  // Store focus coordinates/indices per zone (to preserve cursor memory)
+  const [focusStates, setFocusStates] = useState({});
+
+  const activeZoneRef = useRef(activeZone);
+  const focusStatesRef = useRef(focusStates);
 
   useEffect(() => {
-    currentZoneRef.current = currentZone;
-  }, [currentZone]);
+    activeZoneRef.current = activeZone;
+  }, [activeZone]);
 
   useEffect(() => {
-    focusIndicesRef.current = focusIndices;
-  }, [focusIndices]);
+    focusStatesRef.current = focusStates;
+  }, [focusStates]);
 
-  const getFocusIndex = (zone) => {
-    return focusIndicesRef.current[zone] ?? 0;
+  /**
+   * Helper to retrieve focus details for a specific zone
+   */
+  const getZoneFocus = (zone) => {
+    const state = focusStatesRef.current[zone];
+    if (state === undefined) {
+      return { index: 0, row: 0, col: 0 };
+    }
+    return state;
   };
 
-  const setFocusIndex = (zone, index) => {
-    setFocusIndices(prev => ({ ...prev, [zone]: index }));
+  /**
+   * Updates focus index/coordinates for a zone
+   */
+  const setZoneFocus = (zone, updates) => {
+    setFocusStates(prev => {
+      const current = prev[zone] || { index: 0, row: 0, col: 0 };
+      return {
+        ...prev,
+        [zone]: { ...current, ...updates }
+      };
+    });
+  };
+
+  /**
+   * Public function to manually transition/override active zones
+   */
+  const setZone = (zoneName) => {
+    if (zoneName) {
+      setActiveZone(zoneName);
+    }
   };
 
   useEffect(() => {
     const updateDOMFocus = () => {
-      const zone = currentZoneRef.current;
-      const index = getFocusIndex(zone);
+      const zone = activeZoneRef.current;
+      const focus = getZoneFocus(zone);
+      const config = zonesConfig[zone] || {};
 
-      // Remove class from all elements
+      // Remove the focus class from all elements in the DOM
       document.querySelectorAll('.active-focused').forEach(el => {
         el.classList.remove('active-focused');
       });
 
-      // Find the target element in the active zone
-      const target = document.querySelector(
-        `[data-nav-zone="${zone}"][data-nav-index="${index}"]`
-      );
+      // Find the element in the DOM
+      let target;
+      if (config.type === 'grid') {
+        target = document.querySelector(
+          `[data-nav-zone="${zone}"][data-nav-row="${focus.row}"][data-nav-col="${focus.col}"]`
+        );
+        // Fallback search if exact grid coordinates fail due to dynamic rows
+        if (!target) {
+          target = document.querySelector(`[data-nav-zone="${zone}"]`);
+        }
+      } else {
+        target = document.querySelector(
+          `[data-nav-zone="${zone}"][data-nav-index="${focus.index}"]`
+        );
+      }
 
       if (target) {
         target.classList.add('active-focused');
@@ -67,7 +101,6 @@ export default function useKeyboardNavigation(currentZone, setCurrentZone, zones
           inline: 'nearest'
         });
         
-        // Also focus HTML element for accessibility and native key handling
         if (target.focus) {
           target.focus();
         }
@@ -75,32 +108,35 @@ export default function useKeyboardNavigation(currentZone, setCurrentZone, zones
     };
 
     const handleKeyDown = (e) => {
-      const zoneName = currentZoneRef.current;
+      const zoneName = activeZoneRef.current;
       const config = zonesConfig[zoneName] || {};
       
-      // Query all focusable items in the active zone and sort them
+      // Query elements belonging to this active zone
       const elements = Array.from(
         document.querySelectorAll(`[data-nav-zone="${zoneName}"]`)
-      ).sort((a, b) => {
-        const idxA = parseInt(a.getAttribute('data-nav-index') || '0', 10);
-        const idxB = parseInt(b.getAttribute('data-nav-index') || '0', 10);
-        return idxA - idxB;
-      });
+      );
 
       if (elements.length === 0) return;
 
-      const currentIndex = getFocusIndex(zoneName);
-      
-      // Keep index within bounds
-      let safeIndex = currentIndex;
-      if (safeIndex >= elements.length) {
-        safeIndex = elements.length - 1;
-      }
-      if (safeIndex < 0) {
-        safeIndex = 0;
+      // Sort elements to ensure predictable keyboard focus indexing
+      if (config.type === 'grid') {
+        elements.sort((a, b) => {
+          const rowA = parseInt(a.getAttribute('data-nav-row') || '0', 10);
+          const rowB = parseInt(b.getAttribute('data-nav-row') || '0', 10);
+          if (rowA !== rowB) return rowA - rowB;
+          const colA = parseInt(a.getAttribute('data-nav-col') || '0', 10);
+          const colB = parseInt(b.getAttribute('data-nav-col') || '0', 10);
+          return colA - colB;
+        });
+      } else {
+        elements.sort((a, b) => {
+          const idxA = parseInt(a.getAttribute('data-nav-index') || '0', 10);
+          const idxB = parseInt(b.getAttribute('data-nav-index') || '0', 10);
+          return idxA - idxB;
+        });
       }
 
-      let nextIndex = safeIndex;
+      const focus = getZoneFocus(zoneName);
       let handled = false;
 
       const isVertical = config.type === 'vertical' || !config.type;
@@ -110,148 +146,133 @@ export default function useKeyboardNavigation(currentZone, setCurrentZone, zones
       if (e.key === 'ArrowUp') {
         handled = true;
         if (isVertical) {
-          if (safeIndex > 0) {
-            nextIndex = safeIndex - 1;
-          } else if (config.up === 'wrap') {
-            nextIndex = elements.length - 1;
-          }
+          const nextIdx = focus.index > 0 ? focus.index - 1 : (config.up === 'wrap' ? elements.length - 1 : 0);
+          setZoneFocus(zoneName, { index: nextIdx });
         } else if (isGrid) {
-          // Go up a row in the 2D grid
-          const currentEl = elements[safeIndex];
-          const curRow = parseInt(currentEl.getAttribute('data-nav-row') || '0', 10);
-          const curCol = parseInt(currentEl.getAttribute('data-nav-col') || '0', 10);
-          
-          const target = elements.find(el => {
-            const r = parseInt(el.getAttribute('data-nav-row') || '0', 10);
-            const c = parseInt(el.getAttribute('data-nav-col') || '0', 10);
-            return r === curRow - 1 && c === curCol;
-          });
-          if (target) {
-            nextIndex = elements.indexOf(target);
+          // Move up a row
+          const nextRow = focus.row > 0 ? focus.row - 1 : 0;
+          // Check if elements exist in the target row, fallback if col counts differ
+          const match = elements.find(el => 
+            parseInt(el.getAttribute('data-nav-row') || '0', 10) === nextRow &&
+            parseInt(el.getAttribute('data-nav-col') || '0', 10) === focus.col
+          );
+          if (match) {
+            setZoneFocus(zoneName, { row: nextRow });
           } else if (config.up && config.up !== 'wrap') {
-            setCurrentZone(config.up);
+            setActiveZone(config.up);
           }
         } else if (config.up) {
-          setCurrentZone(config.up);
+          setActiveZone(config.up);
         }
       } else if (e.key === 'ArrowDown') {
         handled = true;
         if (isVertical) {
-          if (safeIndex < elements.length - 1) {
-            nextIndex = safeIndex + 1;
-          } else if (config.down === 'wrap') {
-            nextIndex = 0;
-          }
+          const nextIdx = focus.index < elements.length - 1 ? focus.index + 1 : (config.down === 'wrap' ? 0 : focus.index);
+          setZoneFocus(zoneName, { index: nextIdx });
         } else if (isGrid) {
-          // Go down a row in the 2D grid
-          const currentEl = elements[safeIndex];
-          const curRow = parseInt(currentEl.getAttribute('data-nav-row') || '0', 10);
-          const curCol = parseInt(currentEl.getAttribute('data-nav-col') || '0', 10);
-          
-          const target = elements.find(el => {
-            const r = parseInt(el.getAttribute('data-nav-row') || '0', 10);
-            const c = parseInt(el.getAttribute('data-nav-col') || '0', 10);
-            return r === curRow + 1 && c === curCol;
-          });
-          if (target) {
-            nextIndex = elements.indexOf(target);
+          // Move down a row
+          const maxRow = Math.max(...elements.map(el => parseInt(el.getAttribute('data-nav-row') || '0', 10)));
+          const nextRow = focus.row < maxRow ? focus.row + 1 : focus.row;
+          const match = elements.find(el => 
+            parseInt(el.getAttribute('data-nav-row') || '0', 10) === nextRow &&
+            parseInt(el.getAttribute('data-nav-col') || '0', 10) === focus.col
+          );
+          if (match) {
+            setZoneFocus(zoneName, { row: nextRow });
           } else if (config.down && config.down !== 'wrap') {
-            setCurrentZone(config.down);
+            setActiveZone(config.down);
           }
         } else if (config.down) {
-          setCurrentZone(config.down);
+          setActiveZone(config.down);
         }
       } else if (e.key === 'ArrowLeft') {
         handled = true;
         if (isHorizontal) {
-          if (safeIndex > 0) {
-            nextIndex = safeIndex - 1;
-          } else if (config.left === 'wrap') {
-            nextIndex = elements.length - 1;
-          }
+          const nextIdx = focus.index > 0 ? focus.index - 1 : (config.left === 'wrap' ? elements.length - 1 : 0);
+          setZoneFocus(zoneName, { index: nextIdx });
         } else if (isGrid) {
-          // Go left a column in the 2D grid
-          const currentEl = elements[safeIndex];
-          const curRow = parseInt(currentEl.getAttribute('data-nav-row') || '0', 10);
-          const curCol = parseInt(currentEl.getAttribute('data-nav-col') || '0', 10);
-          
-          const target = elements.find(el => {
-            const r = parseInt(el.getAttribute('data-nav-row') || '0', 10);
-            const c = parseInt(el.getAttribute('data-nav-col') || '0', 10);
-            return r === curRow && c === curCol - 1;
-          });
-          if (target) {
-            nextIndex = elements.indexOf(target);
-          } else if (config.left && config.left !== 'wrap') {
-            setCurrentZone(config.left);
+          // Move left a column
+          if (focus.col > 0) {
+            setZoneFocus(zoneName, { col: focus.col - 1 });
+          } else if (config.left) {
+            setActiveZone(config.left);
           }
         } else if (config.left) {
-          setCurrentZone(config.left);
+          setActiveZone(config.left);
         }
       } else if (e.key === 'ArrowRight') {
         handled = true;
         if (isHorizontal) {
-          if (safeIndex < elements.length - 1) {
-            nextIndex = safeIndex + 1;
-          } else if (config.right === 'wrap') {
-            nextIndex = 0;
-          }
+          const nextIdx = focus.index < elements.length - 1 ? focus.index + 1 : (config.right === 'wrap' ? 0 : focus.index);
+          setZoneFocus(zoneName, { index: nextIdx });
         } else if (isGrid) {
-          // Go right a column in the 2D grid
-          const currentEl = elements[safeIndex];
-          const curRow = parseInt(currentEl.getAttribute('data-nav-row') || '0', 10);
-          const curCol = parseInt(currentEl.getAttribute('data-nav-col') || '0', 10);
-          
-          const target = elements.find(el => {
-            const r = parseInt(el.getAttribute('data-nav-row') || '0', 10);
-            const c = parseInt(el.getAttribute('data-nav-col') || '0', 10);
-            return r === curRow && c === curCol + 1;
-          });
-          if (target) {
-            nextIndex = elements.indexOf(target);
-          } else if (config.right && config.right !== 'wrap') {
-            setCurrentZone(config.right);
+          // Move right a column
+          const maxCol = Math.max(...elements.map(el => parseInt(el.getAttribute('data-nav-col') || '0', 10)));
+          if (focus.col < maxCol) {
+            setZoneFocus(zoneName, { col: focus.col + 1 });
+          } else if (config.right) {
+            setActiveZone(config.right);
           }
         } else if (config.right) {
-          setCurrentZone(config.right);
+          setActiveZone(config.right);
         }
       } else if (e.key === 'Enter') {
         handled = true;
-        const currentEl = elements[safeIndex];
-        if (currentEl) {
-          // Emulate mouse click
-          currentEl.click();
+        let targetEl;
+        if (isGrid) {
+          targetEl = document.querySelector(
+            `[data-nav-zone="${zoneName}"][data-nav-row="${focus.row}"][data-nav-col="${focus.col}"]`
+          );
+        } else {
+          targetEl = document.querySelector(
+            `[data-nav-zone="${zoneName}"][data-nav-index="${focus.index}"]`
+          );
+        }
+
+        if (targetEl) {
+          targetEl.click();
+          if (onEnter) {
+            const index = isGrid ? null : focus.index;
+            onEnter(zoneName, index, targetEl);
+          }
         }
       } else if (e.key === 'Escape' || e.key === 'Backspace') {
         handled = true;
-        if (config.back) {
-          setCurrentZone(config.back);
+        if (onBack) {
+          onBack(zoneName);
+        } else if (config.back) {
+          setActiveZone(config.back);
         }
       }
 
       if (handled) {
         e.preventDefault();
       }
-
-      if (nextIndex !== safeIndex) {
-        setFocusIndex(zoneName, nextIndex);
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
-    
-    // Delay DOM focus search to ensure React has completed rendering the elements
+
+    // Apply focus layout rules on render
     const rafId = requestAnimationFrame(updateDOMFocus);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       cancelAnimationFrame(rafId);
     };
-  }, [currentZone, focusIndices, zonesConfig]);
+  }, [activeZone, focusStates, zonesConfig, onEnter, onBack]);
+
+  // Extract simple index or grid coordinate based on current active config
+  const activeFocusState = getZoneFocus(activeZone);
+  const activeConfig = zonesConfig[activeZone] || {};
+  const focusedIndex = activeConfig.type === 'grid' 
+    ? { row: activeFocusState.row, col: activeFocusState.col }
+    : activeFocusState.index;
 
   return {
-    focusIndices,
-    setFocusIndex,
-    getFocusIndex
+    activeZone,
+    focusedIndex,
+    setZone,
+    focusStates,
+    setZoneFocus
   };
 }

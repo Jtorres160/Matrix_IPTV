@@ -3,6 +3,15 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const http = require('http');
+const https = require('https');
+
+// ── Phase 7: SQLite Database Layer ───────────────────────────────────────────
+const { initDatabase, closeDatabase, cleanupExpiredEPG } = require('./db.cjs');
+const { registerIPCHandlers, setMainWindow } = require('./ipcHandlers.cjs');
+// ─────────────────────────────────────────────────────────────────────────────
+
 let mainWindow;
 let vlcProcess = null;
 let store;
@@ -80,6 +89,138 @@ ipcMain.handle('store:clear', async () => {
   store.clear();
   return true;
 });
+// --- *** NEW: Phase 4 Recording Engine *** ---
+class RecordingManager {
+  constructor() {
+    this.activeRecordings = new Map();
+  }
+
+  startRecording(streamId, url, filename) {
+    return new Promise((resolve, reject) => {
+      if (this.activeRecordings.has(streamId)) {
+        return reject(new Error('Stream already recording.'));
+      }
+
+      // Sanitize filename and append timestamp
+      const safeFilename = filename.replace(/[/\\?%*:|"<>]/g, '_');
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const finalFilename = `${safeFilename}_${timestamp}.ts`;
+      
+      const downloadsPath = app.getPath('downloads');
+      const filePath = path.join(downloadsPath, finalFilename);
+
+      const isHttps = url.startsWith('https');
+      const client = isHttps ? https : http;
+
+      const req = client.get(url, { timeout: 10000 }, (res) => {
+        // Explicitly reject non-200 responses
+        if (res.statusCode !== 200) {
+          req.destroy();
+          return reject(new Error(`Failed to start recording. HTTP Status: ${res.statusCode}`));
+        }
+
+        const writeStream = fs.createWriteStream(filePath);
+        
+        // Masterclass backpressure handling natively via Node's pipe
+        res.pipe(writeStream);
+
+        const startTime = Date.now();
+        
+        const intervalId = setInterval(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            const bytesWritten = writeStream.bytesWritten || 0;
+            const elapsedMs = Date.now() - startTime;
+            mainWindow.webContents.send('recording:progress', {
+              streamId,
+              bytesWritten,
+              elapsedMs,
+              filePath
+            });
+          }
+        }, 1000);
+
+        this.activeRecordings.set(streamId, {
+          request: req,
+          response: res,
+          writeStream,
+          filePath,
+          startTime,
+          intervalId
+        });
+
+        res.on('error', (err) => {
+          console.error(`Recording stream error [${streamId}]:`, err);
+          this.stopRecording(streamId);
+        });
+        
+        writeStream.on('error', (err) => {
+          console.error(`File write error [${streamId}]:`, err);
+          this.stopRecording(streamId);
+        });
+
+        resolve({ success: true, filePath, streamId });
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Connection timed out.'));
+      });
+
+      req.on('error', (err) => {
+        reject(err);
+      });
+    });
+  }
+
+  async stopRecording(streamId) {
+    const record = this.activeRecordings.get(streamId);
+    if (!record) return { success: false, message: 'No active recording found for this stream.' };
+
+    clearInterval(record.intervalId);
+    
+    // Gracefully flush buffer to disk and close file without truncation
+    if (record.writeStream && !record.writeStream.destroyed) {
+      record.writeStream.end();
+    }
+    
+    // Abort the incoming HTTP socket safely
+    if (record.request && !record.request.destroyed) {
+      record.request.destroy();
+    }
+
+    this.activeRecordings.delete(streamId);
+    return { success: true, streamId };
+  }
+
+  getStatus() {
+    const statusList = [];
+    for (const [streamId, record] of this.activeRecordings.entries()) {
+      statusList.push({
+        streamId,
+        filePath: record.filePath,
+        startTime: record.startTime,
+        sizeMb: record.writeStream ? (record.writeStream.bytesWritten / (1024 * 1024)).toFixed(2) : 0
+      });
+    }
+    return statusList;
+  }
+}
+
+const recordingManager = new RecordingManager();
+
+ipcMain.handle('recording:start', async (event, streamId, url, filename) => {
+  return await recordingManager.startRecording(streamId, url, filename);
+});
+
+ipcMain.handle('recording:stop', async (event, streamId) => {
+  return await recordingManager.stopRecording(streamId);
+});
+
+ipcMain.handle('recording:status', async () => {
+  return recordingManager.getStatus();
+});
+// --- *** END OF CHANGE *** ---
+
 // VLC IPC Handlers
 ipcMain.handle('vlc:load', async (event, { url, title, options = [] }) => {
   try {
@@ -167,7 +308,25 @@ function getVLCPath() {
 // Initialize app
 app.whenReady().then(async () => {
   await initStore(); // Initialize store before creating window
+
+  // ── Phase 7: Initialize SQLite database ─────────────────────────────────
+  try {
+    initDatabase();
+    // Prune EPG entries older than 5 days on every launch
+    cleanupExpiredEPG(5);
+    console.log('[Main] SQLite database initialized and EPG cleanup complete.');
+  } catch (err) {
+    console.error('[Main] Failed to initialize SQLite database:', err);
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   createWindow();
+
+  // ── Phase 7: Register database IPC handlers ─────────────────────────────
+  if (mainWindow) {
+    registerIPCHandlers(mainWindow);
+  }
+  // ────────────────────────────────────────────────────────────────────────
 });
 app.on('window-all-closed', () => {
   if (vlcProcess) {
@@ -186,4 +345,7 @@ app.on('before-quit', () => {
   if (vlcProcess) {
     vlcProcess.kill();
   }
+  // ── Phase 7: Close SQLite database gracefully ───────────────────────────
+  closeDatabase();
+  // ────────────────────────────────────────────────────────────────────────
 });

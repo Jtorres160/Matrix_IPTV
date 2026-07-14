@@ -12,6 +12,12 @@ export type ProfileSettings = {
 	playerPreference: PlayerPreference
 	/** Auto-refresh EPG/playlist toggle */
 	autoRefresh: boolean
+	/** EPG Grid Scaling (compact, normal, large) */
+	epgScale: 'compact' | 'normal' | 'large'
+	/** Color Aesthetic Overlays */
+	colorOverlay: string
+	/** Channel Column Width (px) */
+	channelColumnWidth: number
 }
 
 export type UserProfile = {
@@ -25,6 +31,9 @@ export type UserProfile = {
 type ProfilesState = {
 	profiles: Record<string, UserProfile>
 	activeProfileId: string | null
+	activePlaylistId: string | null
+	syncStates: Record<string, any>
+	favorites: number[] // IDs of favorite channels for the active playlist
 
 	// Derived selectors
 	getActiveProfile: () => UserProfile | null
@@ -39,12 +48,27 @@ type ProfilesState = {
 	setPlaylists: (playlists: string[]) => void
 	addPlaylist: (url: string) => void
 	removePlaylist: (url: string) => void
+
+	// Phase 7 SQLite Integration
+	addPlaylistToDB: (profileId: string, playlistData: any) => Promise<string>
+	deletePlaylistFromDB: (playlistId: string) => Promise<void>
+	setActivePlaylistInDB: (playlistId: string) => Promise<void>
+	updateSyncProgress: (playlistId: string, progressData: any) => void
+
+	// Phase 8 SQLite Favorites
+	setFavorites: (favorites: number[]) => void
+	toggleFavoriteState: (channelId: number) => void
+	toggleFavoriteInDB: (playlistId: string, channelId: number) => Promise<void>
+	loadFavoritesFromDB: (playlistId: string) => Promise<void>
 }
 
 const DEFAULT_SETTINGS: ProfileSettings = {
 	theme: 'system',
 	playerPreference: 'internal',
 	autoRefresh: false,
+	epgScale: 'normal',
+	colorOverlay: 'semi-transparent',
+	channelColumnWidth: 300,
 }
 
 // --- DELETED generateId() ---
@@ -100,6 +124,9 @@ export const useProfilesStore = create<ProfilesState>()(
 		(set, get) => ({
 			profiles: {},
 			activeProfileId: null,
+			activePlaylistId: null,
+			syncStates: {},
+			favorites: [],
 
 			getActiveProfile: () => {
 				const state = get()
@@ -214,6 +241,104 @@ export const useProfilesStore = create<ProfilesState>()(
 					}
 				})
 			},
+
+			// --- Additions for Phase 7 SQLite Integration ---
+			
+			// Registers a playlist in the DB and triggers Main Process sync
+			addPlaylistToDB: async (profileId: string, playlistData: any) => {
+				try {
+					// @ts-ignore
+					const result = await window.electronDB.addPlaylist({
+						profile_id: profileId,
+						...playlistData
+					});
+					if (!result.success) throw new Error(result.error);
+					return result.playlist.id;
+				} catch (err) {
+					console.error('Failed to register playlist in database:', err);
+					throw err;
+				}
+			},
+
+			// Deletes playlist from DB and handles store fallback
+			deletePlaylistFromDB: async (playlistId: string) => {
+				try {
+					// @ts-ignore
+					await window.electronDB.deletePlaylist(playlistId);
+					if (get().activePlaylistId === playlistId) {
+						set({ activePlaylistId: null });
+					}
+				} catch (err) {
+					console.error('Failed to delete playlist:', err);
+				}
+			},
+
+			// Updates active state across DB entries and in the Zustand store
+			setActivePlaylistInDB: async (playlistId: string) => {
+				try {
+					// @ts-ignore
+					await window.electronDB.setActivePlaylist({
+						profileId: get().activeProfileId,
+						playlistId
+					});
+					set({ activePlaylistId: playlistId });
+				} catch (err) {
+					console.error('Failed to change active playlist:', err);
+				}
+			},
+
+			// Receives and commits background progress updates to the UI thread
+			updateSyncProgress: (playlistId: string, progressData: any) => {
+				set((state) => ({
+					syncStates: {
+						...state.syncStates,
+						[playlistId]: progressData
+					}
+				}));
+			},
+
+			// --- Additions for Phase 8 Favorites ---
+
+			setFavorites: (favorites: number[]) => {
+				set({ favorites });
+			},
+
+			toggleFavoriteState: (channelId: number) => {
+				set((state) => {
+					const isFav = state.favorites.includes(channelId);
+					return {
+						favorites: isFav 
+							? state.favorites.filter(id => id !== channelId)
+							: [...state.favorites, channelId]
+					};
+				});
+			},
+
+			toggleFavoriteInDB: async (playlistId: string, channelId: number) => {
+				try {
+					// Optimistic UI update
+					get().toggleFavoriteState(channelId);
+					// @ts-ignore
+					const result = await window.electronDB.toggleFavorite(playlistId, channelId);
+					if (!result.success) {
+						// Revert on failure
+						get().toggleFavoriteState(channelId);
+						throw new Error(result.error);
+					}
+				} catch (err) {
+					console.error('Failed to toggle favorite in database:', err);
+				}
+			},
+
+			loadFavoritesFromDB: async (playlistId: string) => {
+				try {
+					// @ts-ignore
+					const favorites = await window.electronDB.getFavorites(playlistId);
+					set({ favorites: favorites.map((f: any) => f.id) });
+				} catch (err) {
+					console.error('Failed to load favorites from database:', err);
+				}
+			}
 		}),
 		{
 			name: 'iptv.profiles.v1',
