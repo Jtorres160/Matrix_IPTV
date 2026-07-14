@@ -20,6 +20,8 @@ export type ProfileSettings = {
 	channelColumnWidth: number
 	/** Phase 9: Hashed Parental PIN */
 	parentalPin?: string
+	/** Phase 10: TMDB API Key for metadata */
+	tmdbApiKey?: string
 }
 
 export type UserProfile = {
@@ -79,6 +81,7 @@ const DEFAULT_SETTINGS: ProfileSettings = {
 	epgScale: 'normal',
 	colorOverlay: 'semi-transparent',
 	channelColumnWidth: 300,
+	tmdbApiKey: '',
 }
 
 // --- DELETED generateId() ---

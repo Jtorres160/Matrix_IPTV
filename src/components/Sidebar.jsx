@@ -46,19 +46,20 @@ export default function Sidebar({ activeZone, onSelect }) {
         }
       `}</style>
 
-      <nav 
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          height: '100vh',
-          zIndex: 100,
-          display: 'flex',
-          flexDirection: 'column',
-          paddingTop: '3rem',
-          pointerEvents: 'none'
-        }}
-      >
+      <div className="hidden md:block">
+        <nav 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            height: '100vh',
+            zIndex: 100,
+            display: 'flex',
+            flexDirection: 'column',
+            paddingTop: '3rem',
+            pointerEvents: 'none'
+          }}
+        >
         {/* 
           Hardware-accelerated background layer.
           We scale the X axis instead of animating width to avoid costly layout reflows on the main thread.
@@ -147,6 +148,7 @@ export default function Sidebar({ activeZone, onSelect }) {
           ))}
         </div>
       </nav>
+      </div>
     </>
   );
 }

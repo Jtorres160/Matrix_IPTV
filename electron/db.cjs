@@ -97,7 +97,37 @@ const SCHEMA_SQL = `
     group_title TEXT NOT NULL,
     PRIMARY KEY (playlist_id, group_title),
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+  -- ── Phase 10: VOD and Series ─────────────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS vod_streams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    playlist_id TEXT NOT NULL,
+    stream_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    stream_icon TEXT,
+    category_id TEXT,
+    group_title TEXT,
+    rating REAL,
+    added TEXT,
+    container_extension TEXT,
+    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS series (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    playlist_id TEXT NOT NULL,
+    series_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    cover TEXT,
+    plot TEXT,
+    category_id TEXT,
+    group_title TEXT,
+    rating REAL,
+    releaseDate TEXT,
+    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_vod_playlist_category ON vod_streams(playlist_id, category_id);
+  CREATE INDEX IF NOT EXISTS idx_series_playlist_category ON series(playlist_id, category_id);
 `;
 
 // ── Database Initialization ──────────────────────────────────────────────────
@@ -312,6 +342,41 @@ function _prepareStatements() {
 
   stmts.getEPGCount = db.prepare(`
     SELECT COUNT(*) AS count FROM epg_programs
+  `);
+
+  // ── VOD and Series Queries ───────────────────────────────────────────────
+  stmts.insertVOD = db.prepare(`
+    INSERT INTO vod_streams (playlist_id, stream_id, name, stream_icon, category_id, group_title, rating, added, container_extension)
+    VALUES (@playlist_id, @stream_id, @name, @stream_icon, @category_id, @group_title, @rating, @added, @container_extension)
+  `);
+
+  stmts.clearPlaylistVODs = db.prepare(`
+    DELETE FROM vod_streams WHERE playlist_id = ?
+  `);
+
+  stmts.getVODsByCategory = db.prepare(`
+    SELECT * FROM vod_streams WHERE playlist_id = ? AND group_title = ? ORDER BY ROWID ASC LIMIT ? OFFSET ?
+  `);
+
+  stmts.getVODCategories = db.prepare(`
+    SELECT DISTINCT group_title FROM vod_streams WHERE playlist_id = ? AND group_title IS NOT NULL AND group_title != '' ORDER BY group_title ASC
+  `);
+
+  stmts.insertSeries = db.prepare(`
+    INSERT INTO series (playlist_id, series_id, name, cover, plot, category_id, group_title, rating, releaseDate)
+    VALUES (@playlist_id, @series_id, @name, @cover, @plot, @category_id, @group_title, @rating, @releaseDate)
+  `);
+
+  stmts.clearPlaylistSeries = db.prepare(`
+    DELETE FROM series WHERE playlist_id = ?
+  `);
+
+  stmts.getSeriesByCategory = db.prepare(`
+    SELECT * FROM series WHERE playlist_id = ? AND group_title = ? ORDER BY ROWID ASC LIMIT ? OFFSET ?
+  `);
+
+  stmts.getSeriesCategories = db.prepare(`
+    SELECT DISTINCT group_title FROM series WHERE playlist_id = ? AND group_title IS NOT NULL AND group_title != '' ORDER BY group_title ASC
   `);
 }
 
@@ -599,6 +664,90 @@ function insertEPGBatch(programs, chunkSize = 1000) {
   return { inserted };
 }
 
+// ── VOD and Series Operations ────────────────────────────────────────────────
+
+function insertVODBatch(playlistId, vods, chunkSize = 500) {
+  _ensureDB();
+  let inserted = 0;
+  for (let i = 0; i < vods.length; i += chunkSize) {
+    const chunk = vods.slice(i, i + chunkSize);
+    const txn = db.transaction((rows) => {
+      for (const vod of rows) {
+        stmts.insertVOD.run({
+          playlist_id: playlistId,
+          stream_id: vod.stream_id,
+          name: vod.name,
+          stream_icon: vod.stream_icon || null,
+          category_id: vod.category_id || null,
+          group_title: vod.group_title || null,
+          rating: vod.rating || 0,
+          added: vod.added || null,
+          container_extension: vod.container_extension || null
+        });
+      }
+    });
+    txn(chunk);
+    inserted += chunk.length;
+  }
+  return { inserted };
+}
+
+function clearPlaylistVODs(playlistId) {
+  _ensureDB();
+  return stmts.clearPlaylistVODs.run(playlistId);
+}
+
+function getVODsByCategory(playlistId, groupTitle, limit = 200, offset = 0) {
+  _ensureDB();
+  return stmts.getVODsByCategory.all(playlistId, groupTitle, limit, offset);
+}
+
+function getVODCategories(playlistId) {
+  _ensureDB();
+  return stmts.getVODCategories.all(playlistId).map(r => r.group_title);
+}
+
+function insertSeriesBatch(playlistId, seriesList, chunkSize = 500) {
+  _ensureDB();
+  let inserted = 0;
+  for (let i = 0; i < seriesList.length; i += chunkSize) {
+    const chunk = seriesList.slice(i, i + chunkSize);
+    const txn = db.transaction((rows) => {
+      for (const s of rows) {
+        stmts.insertSeries.run({
+          playlist_id: playlistId,
+          series_id: s.series_id,
+          name: s.name,
+          cover: s.cover || null,
+          plot: s.plot || null,
+          category_id: s.category_id || null,
+          group_title: s.group_title || null,
+          rating: s.rating || 0,
+          releaseDate: s.releaseDate || null
+        });
+      }
+    });
+    txn(chunk);
+    inserted += chunk.length;
+  }
+  return { inserted };
+}
+
+function clearPlaylistSeries(playlistId) {
+  _ensureDB();
+  return stmts.clearPlaylistSeries.run(playlistId);
+}
+
+function getSeriesByCategory(playlistId, groupTitle, limit = 200, offset = 0) {
+  _ensureDB();
+  return stmts.getSeriesByCategory.all(playlistId, groupTitle, limit, offset);
+}
+
+function getSeriesCategories(playlistId) {
+  _ensureDB();
+  return stmts.getSeriesCategories.all(playlistId).map(r => r.group_title);
+}
+
 /**
  * Retrieves EPG programs for a channel within a time window.
  *
@@ -713,6 +862,16 @@ module.exports = {
   cleanupExpiredEPG,
   clearAllEPG,
   getEPGCount,
+
+  // VOD and Series
+  insertVODBatch,
+  clearPlaylistVODs,
+  getVODsByCategory,
+  getVODCategories,
+  insertSeriesBatch,
+  clearPlaylistSeries,
+  getSeriesByCategory,
+  getSeriesCategories,
 
   // Parental Control
   addLockedCategory: (playlistId, groupTitle) => stmts.addLockedCategory.run(playlistId, groupTitle),

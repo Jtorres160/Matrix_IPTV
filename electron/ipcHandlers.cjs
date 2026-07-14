@@ -280,40 +280,101 @@ async function syncXtreamPlaylist(playlistId, playlist) {
     const { server_url, username, password } = playlist;
     const base = server_url.replace(/\/+$/, '');
 
-    // Stage 1: Fetch live streams
-    sendProgress(playlistId, 'fetching', 10, 'Fetching Xtream live streams...');
+    // ── Live TV ──
+    sendProgress(playlistId, 'fetching', 10, 'Fetching Xtream Live Categories...');
+    const liveCatsUrl = `${base}/player_api.php?username=${username}&password=${password}&action=get_live_categories`;
+    const liveCats = await fetchJSON(liveCatsUrl, 20000).catch(() => []);
+    const liveCatMap = new Map();
+    if (Array.isArray(liveCats)) {
+      liveCats.forEach(c => liveCatMap.set(String(c.category_id), c.category_name));
+    }
+
+    sendProgress(playlistId, 'fetching', 20, 'Fetching Xtream Live Streams...');
     const streamsUrl = `${base}/player_api.php?username=${username}&password=${password}&action=get_live_streams`;
-    const streams = await fetchJSON(streamsUrl, 20000);
+    const streams = await fetchJSON(streamsUrl, 30000);
 
     if (!Array.isArray(streams) || streams.length === 0) {
-      sendProgress(playlistId, 'error', 100, 'No streams returned from Xtream API.');
+      sendProgress(playlistId, 'error', 100, 'No live streams returned from Xtream API.');
       return { success: false, error: 'No streams', channelCount: 0, epgCount: 0 };
     }
 
-    // Map Xtream API response to our channel schema
     const channels = streams.map(item => ({
       stream_id: String(item.stream_id || ''),
       name: item.name || 'Unknown Channel',
       logo: item.stream_icon || null,
       category_id: String(item.category_id || ''),
-      group_title: null, // Xtream uses category_id, not group_title
+      group_title: liveCatMap.get(String(item.category_id)) || 'Uncategorized',
       stream_url: `${base}/live/${username}/${password}/${item.stream_id}.ts`,
       tvg_id: item.epg_channel_id || null,
     }));
 
-    // Stage 2: Clear and insert
-    sendProgress(playlistId, 'inserting', 40, `Inserting ${channels.length} channels...`);
+    sendProgress(playlistId, 'inserting', 40, `Inserting ${channels.length} live channels...`);
     db.clearPlaylistChannels(playlistId);
-    const { inserted } = db.insertChannelsBatch(playlistId, channels);
+    const { inserted: insertedLive } = db.insertChannelsBatch(playlistId, channels);
 
-    // Update timestamp
+    // ── VOD ──
+    sendProgress(playlistId, 'fetching', 60, 'Fetching Xtream VOD...');
+    const vodCatsUrl = `${base}/player_api.php?username=${username}&password=${password}&action=get_vod_categories`;
+    const vodCats = await fetchJSON(vodCatsUrl, 20000).catch(() => []);
+    const vodCatMap = new Map();
+    if (Array.isArray(vodCats)) {
+      vodCats.forEach(c => vodCatMap.set(String(c.category_id), c.category_name));
+    }
+
+    const vodUrl = `${base}/player_api.php?username=${username}&password=${password}&action=get_vod_streams`;
+    const vods = await fetchJSON(vodUrl, 45000).catch(() => []);
+    
+    let insertedVOD = 0;
+    if (Array.isArray(vods)) {
+      const mappedVODs = vods.map(item => ({
+        stream_id: String(item.stream_id || ''),
+        name: item.name || 'Unknown',
+        stream_icon: item.stream_icon || null,
+        category_id: String(item.category_id || ''),
+        group_title: vodCatMap.get(String(item.category_id)) || 'Uncategorized',
+        rating: parseFloat(item.rating_5based || item.rating || 0) || 0,
+        added: item.added || null,
+        container_extension: item.container_extension || null
+      }));
+      db.clearPlaylistVODs(playlistId);
+      insertedVOD = db.insertVODBatch(playlistId, mappedVODs).inserted;
+    }
+
+    // ── Series ──
+    sendProgress(playlistId, 'fetching', 80, 'Fetching Xtream Series...');
+    const seriesCatsUrl = `${base}/player_api.php?username=${username}&password=${password}&action=get_series_categories`;
+    const seriesCats = await fetchJSON(seriesCatsUrl, 20000).catch(() => []);
+    const seriesCatMap = new Map();
+    if (Array.isArray(seriesCats)) {
+      seriesCats.forEach(c => seriesCatMap.set(String(c.category_id), c.category_name));
+    }
+
+    const seriesUrl = `${base}/player_api.php?username=${username}&password=${password}&action=get_series`;
+    const seriesList = await fetchJSON(seriesUrl, 45000).catch(() => []);
+
+    let insertedSeries = 0;
+    if (Array.isArray(seriesList)) {
+      const mappedSeries = seriesList.map(item => ({
+        series_id: String(item.series_id || ''),
+        name: item.name || 'Unknown',
+        cover: item.cover || null,
+        plot: item.plot || null,
+        category_id: String(item.category_id || ''),
+        group_title: seriesCatMap.get(String(item.category_id)) || 'Uncategorized',
+        rating: parseFloat(item.rating_5based || item.rating || 0) || 0,
+        releaseDate: item.releaseDate || null
+      }));
+      db.clearPlaylistSeries(playlistId);
+      insertedSeries = db.insertSeriesBatch(playlistId, mappedSeries).inserted;
+    }
+
     db.upsertPlaylist({ ...playlist, last_updated: Date.now() });
 
-    sendProgress(playlistId, 'done', 100, `Sync complete: ${inserted} channels.`);
+    sendProgress(playlistId, 'done', 100, `Sync complete: ${insertedLive} Live, ${insertedVOD} VOD, ${insertedSeries} Series.`);
 
     return {
       success: true,
-      channelCount: inserted,
+      channelCount: insertedLive,
       epgCount: 0,
     };
   } catch (err) {
@@ -637,6 +698,44 @@ function registerIPCHandlers(mainWindow) {
       return db.getLockedCategories(playlistId);
     } catch (err) {
       console.error('[IPC] db:getLockedCategories error:', err);
+      return [];
+    }
+  });
+
+  // ── VOD and Series Queries ─────────────────────────────────────────────
+
+  ipcMain.handle('db:getVODsByCategory', (_e, playlistId, groupTitle, limit = 200, offset = 0) => {
+    try {
+      return db.getVODsByCategory(playlistId, groupTitle, limit, offset);
+    } catch (err) {
+      console.error('[IPC] db:getVODsByCategory error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:getVODCategories', (_e, playlistId) => {
+    try {
+      return db.getVODCategories(playlistId);
+    } catch (err) {
+      console.error('[IPC] db:getVODCategories error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:getSeriesByCategory', (_e, playlistId, groupTitle, limit = 200, offset = 0) => {
+    try {
+      return db.getSeriesByCategory(playlistId, groupTitle, limit, offset);
+    } catch (err) {
+      console.error('[IPC] db:getSeriesByCategory error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:getSeriesCategories', (_e, playlistId) => {
+    try {
+      return db.getSeriesCategories(playlistId);
+    } catch (err) {
+      console.error('[IPC] db:getSeriesCategories error:', err);
       return [];
     }
   });

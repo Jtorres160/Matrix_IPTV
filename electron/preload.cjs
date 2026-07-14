@@ -51,6 +51,10 @@ contextBridge.exposeInMainWorld('electronDB', {
   addLockedCategory: (playlistId, groupTitle) => ipcRenderer.invoke('db:addLockedCategory', playlistId, groupTitle),
   removeLockedCategory: (playlistId, groupTitle) => ipcRenderer.invoke('db:removeLockedCategory', playlistId, groupTitle),
   getLockedCategories: (playlistId) => ipcRenderer.invoke('db:getLockedCategories', playlistId),
+  getVODsByCategory: (playlistId, groupTitle, limit, offset) => ipcRenderer.invoke('db:getVODsByCategory', playlistId, groupTitle, limit, offset),
+  getVODCategories:  (playlistId) => ipcRenderer.invoke('db:getVODCategories', playlistId),
+  getSeriesByCategory: (playlistId, groupTitle, limit, offset) => ipcRenderer.invoke('db:getSeriesByCategory', playlistId, groupTitle, limit, offset),
+  getSeriesCategories: (playlistId) => ipcRenderer.invoke('db:getSeriesCategories', playlistId),
   getEPGForChannel:  (channelId, startTime, endTime) => ipcRenderer.invoke('db:getEPGForChannel', channelId, startTime, endTime),
   onSyncProgress:    (callback) => {
     const handler = (_, data) => callback(data);

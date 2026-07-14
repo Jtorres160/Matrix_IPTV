@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from "react";
 import ReactPlayer from "react-player";
 import ProfileSwitcher from "./ProfileSwitcher.jsx";
-import { useActiveSettings, useActiveProfile, useProfilesStore } from "./profileStore.js";
+import { useActiveSettings, useActiveProfile, useProfilesStore } from "./store/profileStore.js";
+import { useGlobalPlayer } from "./providers/GlobalPlayerProvider.jsx";
+import BottomNavigationBar from "./components/BottomNavigationBar.jsx";
+import EPGGrid from "./components/EPGGrid.jsx";
+import VODLibrary from "./components/VODLibrary.jsx";
+import SettingsPanel from "./components/SettingsPanel.jsx";
+import Sidebar from "./components/Sidebar.jsx";
+import useMediaKeys from "./hooks/useMediaKeys.js";
+import GlobalLoader from "./components/GlobalLoader.jsx";
 
-// --- Sidebar, CategoryList, ChannelList are unchanged ---
-const Sidebar = ({ onNavigate, onOpenSettings }) => (
-  <div className="flex flex-col gap-4 p-4 bg-[#0e2a2d] h-full border-r border-gray-700 text-gray-200 text-sm">
-  <nav className="flex flex-col gap-3">
-  <button className="hover:text-white text-left" onClick={onOpenSettings}>
-  ⚙️ Settings
-  </button>
-  </nav>
-  </div>
-);
+// Local Sidebar removed in favor of imported component.
 
 const CategoryList = ({ categories = [], activeCategory, onSelectCategory }) => {
   if (!categories || categories.length === 0) {
@@ -72,6 +71,9 @@ const PlayerPreview = ({ selectedChannel, playerPreference, darkMode }) => {
   const [isReady, setIsReady] = useState(false);
   const [vlcAvailable, setVlcAvailable] = useState(false);
   const vlcCheckDone = React.useRef(false);
+  
+  // Consume global player controls
+  const { isPlaying, volume, muted } = useGlobalPlayer();
 
   useEffect(() => {
     if (!vlcCheckDone.current && window.electronVLC) {
@@ -116,17 +118,17 @@ const PlayerPreview = ({ selectedChannel, playerPreference, darkMode }) => {
 
   if (!selectedChannel) {
     return (
-      <div className={`flex-1 flex items-center justify-center text-sm border-b border-gray-700 ${
+      <div className={`flex-1 flex flex-col items-center justify-center text-sm border-b border-gray-700 w-full h-full ${
         darkMode ? "bg-black text-gray-600" : "bg-gray-200 text-gray-800"
       }`}>
-      No Preview Available
+        <span className="text-xl opacity-50 mb-2">No Active Stream</span>
       </div>
     );
   }
 
   if (playerPreference === "vlc") {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center border-b border-gray-700 bg-black text-gray-400">
+      <div className="flex-1 flex flex-col items-center justify-center border-b border-gray-700 bg-black text-gray-400 w-full h-full">
       <div className="text-lg mb-2">📺 Playing in VLC</div>
       <div className="text-sm mb-2">{selectedChannel.name}</div>
       {!vlcAvailable && (
@@ -145,7 +147,7 @@ const PlayerPreview = ({ selectedChannel, playerPreference, darkMode }) => {
 
   if (playerPreference === "embeddedVLC") {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center border-b border-gray-700 bg-black text-gray-400">
+      <div className="flex-1 flex flex-col items-center justify-center border-b border-gray-700 bg-black text-gray-400 w-full h-full">
       <div className="text-yellow-500 mb-2">⚠️ Embedded VLC Coming Soon</div>
       <div className="text-sm mb-2">Using ReactPlayer as fallback</div>
       <div className="text-xs text-gray-500">Switch to "VLC (External App)" for VLC playback</div>
@@ -155,20 +157,22 @@ const PlayerPreview = ({ selectedChannel, playerPreference, darkMode }) => {
 
   // Internal ReactPlayer (default)
   return (
-    <div className="flex-1 border-b border-gray-700 bg-black relative">
+    <div className="flex-1 border-b border-gray-700 bg-black relative w-full h-full">
     {!isReady && (
       <div className="absolute inset-0 flex items-center justify-center text-white z-10">
       <div className="text-sm">Loading {selectedChannel.name}...</div>
       </div>
     )}
     <ReactPlayer
-    key={selectedChannel.url}
-    url={selectedChannel.url}
-    playing
-    controls
-    width="100%"
-    height="100%"
-    onReady={() => setIsReady(true)}
+      key={selectedChannel.url}
+      url={selectedChannel.url}
+      playing={isPlaying}
+      volume={volume}
+      muted={muted}
+      controls={false}
+      width="100%"
+      height="100%"
+      onReady={() => setIsReady(true)}
     onError={(e) => {
       // --- *** ADDED CONSOLE LOG *** ---
       console.error('[Matrix_IPTV] ReactPlayer Error:', e, 'for URL:', selectedChannel.url);
@@ -413,6 +417,14 @@ function parseM3UChannels(text) {
 }
 
 export default function App() {
+  const [currentView, setCurrentView] = useState(() => {
+    return localStorage.getItem('matrix_last_view') || 'live-tv';
+  });
+  
+  useEffect(() => {
+    localStorage.setItem('matrix_last_view', currentView);
+  }, [currentView]);
+
   const [selectedChannel, setSelectedChannel] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [channels, setChannels] = useState([]);
@@ -425,6 +437,9 @@ export default function App() {
   const [epgUrl, setEpgUrl] = useState(null);
   const [epgData, setEpgData] = useState(new Map());
   const [isLoadingEpg, setIsLoadingEpg] = useState(false);
+
+  const { activeStreamUrl, playStream } = useGlobalPlayer();
+  useMediaKeys();
 
   const activeSettings = useActiveSettings();
   const activeProfile = useActiveProfile();
@@ -655,88 +670,89 @@ export default function App() {
   };
 
   return (
-    <div
-      className={`flex h-screen font-sans ${darkMode ? "bg-[#0a1f22] text-gray-100" : "bg-gray-100 text-gray-900"
-        }`}
-    >
-      <Sidebar onNavigate={() => {}} onOpenSettings={() => setIsSettingsOpen(true)} />
-      <CategoryList 
-        categories={categories} 
-        activeCategory={activeCategory} 
-        onSelectCategory={handleCategorySelect} 
-      />
+    <div className={`relative w-screen h-screen overflow-hidden font-sans ${darkMode ? "bg-[#0a1f22] text-gray-100" : "bg-gray-100 text-gray-900"}`}>
       
-      <div className="flex flex-col w-80 border-r border-gray-700">
-        <div className="p-2 border-b border-gray-800">
-          <input
-            type="text"
-            placeholder="🔍 Search channels..."
-            className="w-full p-1 bg-[#0c3337] text-gray-200 rounded border border-gray-600 text-sm"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        <FilteredChannelList
-          channels={channels}
-          activeCategory={activeCategory}
-          searchTerm={searchTerm} 
-          onSelect={handleChannelSelect}
-          selectedChannelId={selectedChannel?.id}
+      {/* Layer 0 (z-0): Background Player */}
+      <div className="absolute inset-0 z-0">
+        <PlayerPreview
+          key={activeStreamUrl ? activeStreamUrl : 'no-channel'}
+          selectedChannel={activeStreamUrl ? { url: activeStreamUrl, name: activeChannelName || 'Live Stream' } : null}
+          playerPreference={playerPreference}
+          darkMode={darkMode}
         />
       </div>
-      
-      <div className="flex flex-col flex-1 relative">
-        <div className="absolute top-2 right-2 flex items-center gap-3 z-10">
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="bg-gray-700 hover:bg-gray-600 text-white px-3 py-1 rounded"
-          >
-            ⚙️
-          </button>
-        </div>
-        
-        <PlayerPreview
-          key={selectedChannel ? selectedChannel.url : 'no-channel'}
-          selectedChannel={selectedChannel}
-          playerPreference={playerPreference}
-          darkMode={darkMode}
-        />
 
-        {(playlistMessage && !isLoadingEpg) && (
-          <div className="px-4 py-2 text-xs text-gray-400 border-t border-gray-800">
-            {playlistMessage}
+      {/* Layer 1 (z-10): Active View */}
+      <div className="absolute inset-0 z-10 pointer-events-auto">
+        {currentView === 'live-tv' && (
+          <div className="w-full h-full bg-black/40 backdrop-blur-sm pl-0 md:pl-[260px] pb-16 md:pb-0 transition-all duration-300">
+            <EPGGrid 
+              channels={channels} 
+              epgData={epgData} 
+              onPlayStream={(url) => playStream(url, "Live Stream")} 
+            />
           </div>
         )}
-        <EPGInfo epgData={selectedChannelEpg} />
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          darkMode={darkMode}
-          setDarkMode={(isDark) => {
-            console.log('[Matrix_IPTV] Setting theme:', isDark ? 'dark' : 'light');
-            updateSettings({ theme: isDark ? 'dark' : 'light' });
-          }}
-          playerPreference={playerPreference}
-          setPlayerPreference={(pref) => {
-            console.log('[Matrix_IPTV] Setting player preference:', pref);
-            updateSettings({ playerPreference: pref });
-          }}
-          autoRefresh={autoRefresh}
-          setAutoRefresh={(enabled) => {
-            console.log('[Matrix_IPTV] Setting auto-refresh:', enabled);
-            updateSettings({ autoRefresh: enabled });
-          }}
-          playlists={activeProfile ? activeProfile.playlists : []}
-          onAddPlaylist={async (url) => {
-            const ok = await loadPlaylist(url);
-            if (ok) addPlaylistToProfile(url);
-            return ok;
-          }}
-          onRemovePlaylist={(url) => removePlaylistFromProfile(url)}
-          onUploadFile={(file) => loadPlaylistFromFile(file)}
-          isLoading={isLoadingPlaylist || isLoadingEpg}
-          statusMessage={playlistMessage}
-        />
+        {currentView === 'movies' && (
+          <div className="w-full h-full bg-[#0a1f22]/90 pl-0 md:pl-[260px] pb-16 md:pb-0 transition-all duration-300 overflow-y-auto">
+            <VODLibrary type="movies" onPlayStream={(url) => playStream(url, "Movie")} />
+          </div>
+        )}
+        {currentView === 'series' && (
+          <div className="w-full h-full bg-[#0a1f22]/90 pl-0 md:pl-[260px] pb-16 md:pb-0 transition-all duration-300 overflow-y-auto">
+            <VODLibrary type="series" onPlayStream={(url) => playStream(url, "Series")} />
+          </div>
+        )}
+        {currentView === 'settings' && (
+          <div className="w-full h-full bg-[#0e2a2d] pl-0 md:pl-[260px] pb-16 md:pb-0 transition-all duration-300 overflow-y-auto">
+            <SettingsPanel />
+          </div>
+        )}
+      </div>
+
+      {/* Layer 2 (z-20): Navigation */}
+      <div className="absolute inset-0 z-20 pointer-events-none">
+        <div className="pointer-events-auto">
+          <Sidebar activeZone="sidebar" onSelect={(id) => {
+            if (id === 'settings') setIsSettingsOpen(true);
+            else setCurrentView(id);
+          }} />
+        </div>
+        <div className="pointer-events-auto">
+          <BottomNavigationBar currentView={currentView} onSelect={(id) => {
+            if (id === 'settings') setIsSettingsOpen(true);
+            else setCurrentView(id);
+          }} />
+        </div>
+      </div>
+
+      {/* Layer 2.5: Global Loader (intercepts D-pad) */}
+      <GlobalLoader isLoading={isLoadingPlaylist || isLoadingEpg} />
+
+      {/* Layer 3 (z-30): Overlays */}
+      <div className="absolute inset-0 z-30 pointer-events-none">
+        <div className="pointer-events-auto">
+          <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            darkMode={darkMode}
+            setDarkMode={(isDark) => updateSettings({ theme: isDark ? 'dark' : 'light' })}
+            playerPreference={playerPreference}
+            setPlayerPreference={(pref) => updateSettings({ playerPreference: pref })}
+            autoRefresh={autoRefresh}
+            setAutoRefresh={(enabled) => updateSettings({ autoRefresh: enabled })}
+            playlists={activeProfile ? activeProfile.playlists : []}
+            onAddPlaylist={async (url) => {
+              const ok = await loadPlaylist(url);
+              if (ok) addPlaylistToProfile(url);
+              return ok;
+            }}
+            onRemovePlaylist={(url) => removePlaylistFromProfile(url)}
+            onUploadFile={(file) => loadPlaylistFromFile(file)}
+            isLoading={isLoadingPlaylist || isLoadingEpg}
+            statusMessage={playlistMessage}
+          />
+        </div>
       </div>
     </div>
   );
