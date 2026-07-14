@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useActiveSettings, useProfilesStore } from '../profileStore.js';
+import { useActiveSettings, useProfilesStore } from '../store/profileStore';
 import ProfileSwitcher from '../ProfileSwitcher.jsx';
 import { useAppStore } from '../store/appStore.js';
 import { 

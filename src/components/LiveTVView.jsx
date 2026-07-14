@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/appStore.js';
-import { useActiveProfile, useProfilesStore } from '../profileStore.js';
+import { useActiveProfile, useProfilesStore } from '../store/profileStore';
 import { LucideSearch, LucideHeart, LucidePlayCircle, LucideTv, LucideImageOff, LucideListVideo } from 'lucide-react';
 import { usePlayerStore } from '../player/playerStore.js';
 import FavoritesRail from './favorites/FavoritesRail.jsx';
