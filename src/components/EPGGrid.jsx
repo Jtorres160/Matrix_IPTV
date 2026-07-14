@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 
 // Master scale configuration (px per minute). 
 // 8px/min = 240px per 30-minute block. Perfect for TV readability.
