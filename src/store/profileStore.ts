@@ -29,6 +29,8 @@ export type UserProfile = {
 	name: string
 	/** M3U or remote playlist URLs for this profile */
 	playlists: string[]
+	/** Watch history for continue watching rail */
+	watchHistory?: any[]
 	settings: ProfileSettings
 }
 
@@ -52,6 +54,7 @@ type ProfilesState = {
 	setPlaylists: (playlists: string[]) => void
 	addPlaylist: (url: string) => void
 	removePlaylist: (url: string) => void
+	updateWatchHistory: (channelId: string | number, durationSeconds?: number) => void
 
 	// Phase 7 SQLite Integration
 	addPlaylistToDB: (profileId: string, playlistData: any) => Promise<string>
@@ -167,6 +170,7 @@ export const useProfilesStore = create<ProfilesState>()(
 					id,
 					name: name?.trim() || 'New Profile',
 					playlists: [],
+					watchHistory: [],
 					settings: { ...DEFAULT_SETTINGS },
 				}
 				set((state) => ({
@@ -262,6 +266,52 @@ export const useProfilesStore = create<ProfilesState>()(
 						},
 					}
 				})
+			},
+
+			updateWatchHistory: (channelId: string | number, durationSeconds: number = 0) => {
+				set((state) => {
+					const active = state.activeProfileId;
+					if (!active) return {};
+					const profile = state.profiles[active];
+					const history = profile.watchHistory || [];
+					
+					const existingIdx = history.findIndex((item: any) => item.channelId === channelId);
+					
+					let updatedHistory = [...history];
+					const now = Date.now();
+					
+					if (existingIdx >= 0) {
+						const current = updatedHistory[existingIdx];
+						const newSessions = current.sessions + 1;
+						const newTotalSeconds = (current.totalWatchSeconds || 0) + durationSeconds;
+						updatedHistory[existingIdx] = {
+							...current,
+							lastWatchedAt: now,
+							totalWatchSeconds: newTotalSeconds,
+							sessions: newSessions,
+							averageSessionSeconds: newSessions > 0 ? Math.floor(newTotalSeconds / newSessions) : 0
+						};
+					} else {
+						updatedHistory.push({
+							channelId,
+							firstWatchedAt: now,
+							lastWatchedAt: now,
+							totalWatchSeconds: durationSeconds,
+							sessions: 1,
+							averageSessionSeconds: durationSeconds
+						});
+					}
+					
+					return {
+						profiles: {
+							...state.profiles,
+							[active]: { 
+								...profile, 
+								watchHistory: updatedHistory 
+							},
+						},
+					};
+				});
 			},
 
 			// --- Additions for Phase 7 SQLite Integration ---
