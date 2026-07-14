@@ -4,6 +4,8 @@ import { useAppStore } from "./store/appStore.js";
 import { fetchAndParseEPG } from "./services/epgParser.js";
 import { loadPlaylist as fetchPlaylist } from "./lib/m3u/playlistService.js";
 import { getPlaylistFromCache, savePlaylistToCache } from "./lib/m3u/playlistCache.js";
+import { runChannelParityCheck } from "./lib/tv/dbChannelAdapter.js";
+import { DB_CHANNEL_PARITY } from "./config/featureFlags.js";
 
 import BottomNavigationBar from "./components/BottomNavigationBar.jsx";
 import Sidebar from "./components/Sidebar.jsx";
@@ -185,6 +187,19 @@ export default function App() {
        if (typeof window !== 'undefined' && window.electronDB && playlist.id) {
          window.electronDB
            .syncPlaylist(playlist.id)
+           .then(() => {
+             // ── Phase 2.1: read-only parity diagnostics ──────────────────
+             // Observational ONLY. Compares the renderer channels (source of
+             // truth for the view, just set above) against what the SQLite
+             // adapter produces from the freshly-synced DB. Never changes the
+             // Live TV source, never mutates state, never throws.
+             if (DB_CHANNEL_PARITY) {
+               runChannelParityCheck({
+                 rendererChannels: result.channels,
+                 playlistId: playlist.id,
+               }).catch(() => {});
+             }
+           })
            .catch((dbErr) => console.error('[Matrix_IPTV] Background SQLite resync failed (non-fatal):', dbErr));
        }
     } else {

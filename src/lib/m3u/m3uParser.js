@@ -1,4 +1,7 @@
-function mapGroupToAllowed(groupString) {
+// Exported so the DB channel adapter (Phase 2) can reproduce the exact same
+// `groups` array from a SQLite `group_title`, guaranteeing parity with the
+// renderer parse path. This is the single source of truth for group mapping.
+export function mapGroupToAllowed(groupString) {
   if (!groupString || !groupString.trim()) {
     return ['Other'];
   }
