@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
-import { useGlobalPlayer } from '../providers/GlobalPlayerProvider.jsx';
+import { usePlayerStore } from '../player/playerStore.js';
 import { useToast } from '../providers/ToastProvider.jsx';
 
 export default function useMediaKeys() {
-  const { togglePlay, setVolume, toggleMute, volume } = useGlobalPlayer();
+  const { play, pause, playbackState, setVolume, toggleMute, previousChannel, nextChannel } = usePlayerStore();
+  const togglePlay = () => playbackState === 'playing' ? pause() : play();
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -17,8 +18,13 @@ export default function useMediaKeys() {
           handled = true;
           break;
         case 'MediaTrackNext':
+          nextChannel();
+          showToast('Next Channel', 'info', 1500);
+          handled = true;
+          break;
         case 'MediaTrackPrevious':
-          // Optional: Map to channel up/down if applicable
+          previousChannel();
+          showToast('Previous Channel', 'info', 1500);
           handled = true;
           break;
         case 'AudioVolumeUp':
@@ -57,12 +63,12 @@ export default function useMediaKeys() {
 
     // Also integrate with MediaSession API if available
     if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', () => togglePlay());
-      navigator.mediaSession.setActionHandler('pause', () => togglePlay());
+      navigator.mediaSession.setActionHandler('play', () => play());
+      navigator.mediaSession.setActionHandler('pause', () => pause());
       navigator.mediaSession.setActionHandler('seekbackward', null);
       navigator.mediaSession.setActionHandler('seekforward', null);
-      navigator.mediaSession.setActionHandler('previoustrack', null);
-      navigator.mediaSession.setActionHandler('nexttrack', null);
+      navigator.mediaSession.setActionHandler('previoustrack', () => previousChannel());
+      navigator.mediaSession.setActionHandler('nexttrack', () => nextChannel());
     }
 
     return () => {
@@ -70,7 +76,9 @@ export default function useMediaKeys() {
       if ('mediaSession' in navigator) {
         navigator.mediaSession.setActionHandler('play', null);
         navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
       }
     };
-  }, [togglePlay, setVolume, toggleMute, showToast]);
+  }, [togglePlay, play, pause, setVolume, toggleMute, previousChannel, nextChannel, showToast]);
 }

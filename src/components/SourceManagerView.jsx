@@ -1,0 +1,336 @@
+import React, { useState, useRef } from 'react';
+import { useProfilesStore, useActiveProfile } from '../profileStore.js';
+import { useAppStore } from '../store/appStore.js';
+import { LucideLink, LucideFile, LucideServer, LucideGlobe, LucideTrash2, LucidePlay, LucideCheckCircle2, LucideAlertCircle } from 'lucide-react';
+
+export default function SourceManagerView() {
+  const [activeTab, setActiveTab] = useState('m3u_url');
+  
+  return (
+    <div className="flex h-full w-full bg-[#0a1f22] text-gray-200">
+      {/* Sidebar / Tabs */}
+      <div className="w-64 bg-[#0c2a2d] border-r border-gray-700 flex flex-col">
+        <div className="p-6">
+          <h2 className="text-xl font-bold tracking-tight text-white mb-1">Sources</h2>
+          <p className="text-xs text-gray-400">Manage your media providers</p>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto px-4 space-y-2">
+          <TabButton 
+            active={activeTab === 'm3u_url'} 
+            onClick={() => setActiveTab('m3u_url')}
+            icon={<LucideLink size={18} />} 
+            label="M3U URL" 
+          />
+          <TabButton 
+            active={activeTab === 'local_file'} 
+            onClick={() => setActiveTab('local_file')}
+            icon={<LucideFile size={18} />} 
+            label="Local File" 
+          />
+          <TabButton 
+            active={activeTab === 'xtream'} 
+            onClick={() => setActiveTab('xtream')}
+            icon={<LucideServer size={18} />} 
+            label="Xtream Codes" 
+            badge="Soon"
+          />
+          <TabButton 
+            active={activeTab === 'stalker'} 
+            onClick={() => setActiveTab('stalker')}
+            icon={<LucideGlobe size={18} />} 
+            label="Stalker Portal" 
+            badge="Soon"
+          />
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-[#0a1f22] to-[#0d2e33]">
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="max-w-4xl mx-auto space-y-12">
+            {activeTab === 'm3u_url' && <M3uUrlManager />}
+            {activeTab === 'local_file' && <LocalFileManager />}
+            {(activeTab === 'xtream' || activeTab === 'stalker') && <ComingSoonManager />}
+            
+            <div className="border-t border-gray-700 pt-8 mt-12">
+              <h3 className="text-lg font-semibold text-white mb-4">Saved Playlists</h3>
+              <SavedPlaylistsList />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, icon, label, badge }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
+        active 
+          ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-inner' 
+          : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'
+      }`}
+    >
+      <div className="flex items-center gap-3">
+        {icon}
+        <span className="font-medium text-sm">{label}</span>
+      </div>
+      {badge && (
+        <span className="text-[10px] uppercase font-bold tracking-wider bg-gray-800 text-gray-500 px-2 py-0.5 rounded-full">
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Implementations
+// ─────────────────────────────────────────────────────────────────────────────
+
+function M3uUrlManager() {
+  const [url, setUrl] = useState("");
+  const [status, setStatus] = useState({ type: '', msg: '' });
+  
+  const addPlaylist = useProfilesStore((s) => s.addPlaylist);
+  const { isLoadingPlaylist } = useAppStore();
+
+  const handleAdd = async () => {
+    if (!url) return;
+    setStatus({ type: 'loading', msg: 'Importing playlist...' });
+    
+    try {
+      // For now, we just save the URL. The actual parsing happens in supreme_layout
+      // when the profile switches or when it's first added, but we need to trigger a load.
+      addPlaylist(url);
+      setStatus({ type: 'success', msg: 'Playlist saved successfully. Switch to Live TV to view channels.' });
+      setUrl("");
+    } catch (err) {
+      setStatus({ type: 'error', msg: 'Failed to add playlist.' });
+    }
+  };
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-white mb-2">Add M3U Playlist</h2>
+        <p className="text-gray-400">Import channels and EPG data from a remote URL.</p>
+      </div>
+
+      <div className="bg-[#123236] p-6 rounded-xl border border-gray-700 shadow-xl space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Playlist URL</label>
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="http://example.com/playlist.m3u"
+            className="w-full bg-[#0a1f22] border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+            onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+          />
+        </div>
+        
+        <div className="flex items-center justify-between pt-2">
+          <div className="flex-1 mr-4">
+            <StatusMessage status={status} />
+          </div>
+          <button
+            onClick={handleAdd}
+            disabled={!url || isLoadingPlaylist}
+            className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
+              !url || isLoadingPlaylist 
+                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20'
+            }`}
+          >
+            {isLoadingPlaylist ? 'Importing...' : 'Add Source'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LocalFileManager() {
+  const [dragActive, setDragActive] = useState(false);
+  const [status, setStatus] = useState({ type: '', msg: '' });
+  const fileInputRef = useRef(null);
+
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true);
+    } else if (e.type === "dragleave") {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleChange = (e) => {
+    e.preventDefault();
+    if (e.target.files && e.target.files[0]) {
+      handleFile(e.target.files[0]);
+    }
+  };
+
+  const handleFile = (file) => {
+    if (!file.name.match(/\.(m3u|m3u8|txt)$/i)) {
+      setStatus({ type: 'error', msg: 'Invalid file type. Please upload an M3U file.' });
+      return;
+    }
+    setStatus({ type: 'success', msg: `Local file parsing is coming in the next commit. File selected: ${file.name}` });
+  };
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-white mb-2">Local File</h2>
+        <p className="text-gray-400">Import an M3U playlist from your computer.</p>
+      </div>
+
+      <div 
+        className={`relative flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl transition-all duration-200 ${
+          dragActive 
+            ? 'border-blue-500 bg-blue-500/10' 
+            : 'border-gray-600 bg-[#123236] hover:border-gray-500 hover:bg-[#15383d]'
+        }`}
+        onDragEnter={handleDrag}
+        onDragLeave={handleDrag}
+        onDragOver={handleDrag}
+        onDrop={handleDrop}
+      >
+        <div className="w-16 h-16 bg-[#0a1f22] rounded-full flex items-center justify-center mb-4 shadow-inner">
+          <LucideFile size={28} className="text-blue-400" />
+        </div>
+        <h3 className="text-lg font-semibold text-white mb-2">Drag & Drop M3U File Here</h3>
+        <p className="text-gray-400 mb-6 text-sm">or click to browse your computer</p>
+        
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".m3u,.m3u8,.txt"
+          onChange={handleChange}
+          className="hidden"
+        />
+        
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-medium transition-colors"
+        >
+          Browse Files
+        </button>
+      </div>
+      
+      <div className="mt-4">
+        <StatusMessage status={status} />
+      </div>
+    </div>
+  );
+}
+
+function ComingSoonManager() {
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center justify-center py-20">
+      <div className="w-20 h-20 bg-[#123236] rounded-2xl flex items-center justify-center mb-6 border border-gray-700">
+        <LucideServer size={32} className="text-gray-500" />
+      </div>
+      <h2 className="text-2xl font-bold text-white mb-2">Coming Soon</h2>
+      <p className="text-gray-400 max-w-md text-center">
+        Support for Xtream Codes and Stalker Portals is under active development. 
+        Check back in a future update!
+      </p>
+    </div>
+  );
+}
+
+function SavedPlaylistsList() {
+  const activeProfile = useActiveProfile();
+  const removePlaylist = useProfilesStore((s) => s.removePlaylist);
+  const playlists = activeProfile?.playlists || [];
+
+  if (playlists.length === 0) {
+    return (
+      <div className="text-center py-12 bg-[#123236] rounded-xl border border-gray-700 shadow-inner">
+        <LucideLink size={32} className="mx-auto text-gray-500 mb-4 opacity-50" />
+        <p className="text-gray-300 font-medium text-lg">No Providers Connected</p>
+        <p className="text-gray-500 text-sm mt-2">Add a media source above to populate your library</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {playlists.map((url, idx) => (
+        <div key={idx} className="flex items-center justify-between p-5 bg-[#123236] rounded-xl border border-gray-700 shadow-md group hover:border-gray-500 transition-all">
+          <div className="flex items-center gap-5 overflow-hidden w-2/3">
+            <div className="w-12 h-12 rounded-xl bg-[#0a1f22] border border-gray-600 flex items-center justify-center shrink-0 shadow-inner">
+              <LucideLink size={20} className="text-blue-400" />
+            </div>
+            <div className="truncate pr-4 w-full">
+              <div className="text-base font-semibold text-white truncate mb-1">{url}</div>
+              <div className="flex items-center gap-3 text-xs text-gray-400 font-medium">
+                <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500"></div> Connected</span>
+                <span>•</span>
+                <span>M3U Provider</span>
+                <span>•</span>
+                <span>~ Channels</span>
+                <span>•</span>
+                <span className="text-blue-400/80">EPG Active</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="text-right mr-4 hidden md:block">
+              <div className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Last Sync</div>
+              <div className="text-sm text-gray-300">Just now</div>
+            </div>
+            
+            <button 
+              className="p-2.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              title="Manual Refresh"
+            >
+              <LucidePlay size={18} />
+            </button>
+            <button 
+              onClick={() => removePlaylist(url)}
+              className="p-2.5 text-red-400 hover:text-white hover:bg-red-500/20 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-red-500"
+              title="Remove Provider"
+            >
+              <LucideTrash2 size={18} />
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function StatusMessage({ status }) {
+  if (!status || !status.msg) return null;
+
+  const config = {
+    loading: { icon: <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />, color: 'text-blue-400' },
+    success: { icon: <LucideCheckCircle2 size={16} />, color: 'text-green-400' },
+    error: { icon: <LucideAlertCircle size={16} />, color: 'text-red-400' },
+  }[status.type] || { icon: null, color: 'text-gray-400' };
+
+  return (
+    <div className={`flex items-center gap-2 text-sm font-medium ${config.color} animate-in fade-in duration-300`}>
+      {config.icon}
+      <span>{status.msg}</span>
+    </div>
+  );
+}

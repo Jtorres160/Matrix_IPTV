@@ -75,6 +75,7 @@ export const useProfilesStore = create(
 					name: (name || '').trim() || 'New Profile',
 					playlists: [],
 					favorites: [],
+					recentlyWatched: [],
 					settings: { ...DEFAULT_SETTINGS },
 				}
 				set((state) => ({
@@ -127,6 +128,52 @@ export const useProfilesStore = create(
 						},
 					}
 				})
+			},
+
+			toggleFavorite: (channelId) => {
+				set((state) => {
+					const active = state.activeProfileId
+					if (!active) return {}
+					const profile = state.profiles[active]
+					const favorites = profile.favorites || []
+					const isFav = favorites.includes(channelId)
+					return {
+						profiles: {
+							...state.profiles,
+							[active]: { 
+								...profile, 
+								favorites: isFav 
+									? favorites.filter(id => id !== channelId)
+									: [...favorites, channelId]
+							},
+						},
+					}
+				})
+			},
+
+			addRecentlyWatched: (channelId) => {
+				set((state) => {
+					const active = state.activeProfileId;
+					if (!active) return {};
+					const profile = state.profiles[active];
+					let recent = profile.recentlyWatched || [];
+					
+					// Remove duplicate if exists
+					recent = recent.filter(id => id !== channelId);
+					
+					// Add to front and limit to 20
+					recent = [channelId, ...recent].slice(0, 20);
+					
+					return {
+						profiles: {
+							...state.profiles,
+							[active]: { 
+								...profile, 
+								recentlyWatched: recent 
+							},
+						},
+					};
+				});
 			},
 
 			// Keep addPlaylist wrapper for backward compatibility

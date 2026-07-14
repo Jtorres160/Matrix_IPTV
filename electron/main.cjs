@@ -1,6 +1,6 @@
 // electron/main.cjs
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -67,6 +67,39 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
+
+  // --- *** NEW: Native Context Menu *** ---
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const template = [];
+    
+    if (params.isEditable) {
+      template.push({ role: 'undo' });
+      template.push({ role: 'redo' });
+      template.push({ type: 'separator' });
+      template.push({ role: 'cut' });
+    }
+
+    if (params.isEditable || params.selectionText.trim().length > 0) {
+      template.push({ role: 'copy' });
+    }
+
+    if (params.isEditable) {
+      template.push({ role: 'paste' });
+      template.push({ type: 'separator' });
+      template.push({ role: 'selectAll' });
+    }
+
+    if (!app.isPackaged) {
+      if (template.length > 0) template.push({ type: 'separator' });
+      template.push({ role: 'toggleDevTools' });
+    }
+
+    if (template.length > 0) {
+      const contextMenu = Menu.buildFromTemplate(template);
+      contextMenu.popup(mainWindow);
+    }
+  });
+  // --- *** END OF CHANGE *** ---
 }
 
 // Electron Store IPC Handlers
