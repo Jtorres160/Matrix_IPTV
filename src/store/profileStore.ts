@@ -385,6 +385,20 @@ export const useProfilesStore = create<ProfilesState>()(
 				},
 
 				deleteProfile: (profileId) => {
+					// Cascade-delete every SQLite playlist owned by this profile BEFORE
+					// dropping it from Zustand, so the playlist ids are still available.
+					// Fire-and-forget + guarded; must not block profile removal.
+					const profile = get().profiles[profileId]
+					if (
+						profile?.playlists?.length &&
+						typeof window !== 'undefined' &&
+						(window as any).electronDB
+					) {
+						for (const p of profile.playlists) {
+							if (p?.id) void get().deletePlaylistFromDB(p.id)
+						}
+					}
+
 					set((state) => {
 						const { [profileId]: _removed, ...rest } = state.profiles
 						let nextActive = state.activeProfileId
@@ -627,16 +641,30 @@ export const useProfilesStore = create<ProfilesState>()(
 				},
 
 				removePlaylist: (urlOrId) => {
+					// Resolve the actual playlist id (callers may pass id OR url) and
+					// cascade-delete its SQLite rows (channels/VOD/series/favorites/
+					// locked_categories via ON DELETE CASCADE). deletePlaylistFromDB is
+					// guarded + non-fatal and clears activePlaylistId if it was active.
+					const active = get().activeProfileId
+					const match = active
+						? (get().profiles[active]?.playlists || []).find(
+								(p) => p.id === urlOrId || p.url === urlOrId
+							)
+						: undefined
+					if (match?.id && typeof window !== 'undefined' && (window as any).electronDB) {
+						void get().deletePlaylistFromDB(match.id)
+					}
+
 					set((state) => {
-						const active = state.activeProfileId
-						if (!active) return {}
-						const profile = state.profiles[active]
+						const activeId = state.activeProfileId
+						if (!activeId) return {}
+						const profile = state.profiles[activeId]
 						const playlists = profile.playlists || []
 
 						return {
 							profiles: {
 								...state.profiles,
-								[active]: {
+								[activeId]: {
 									...profile,
 									playlists: playlists.filter((p) => p.id !== urlOrId && p.url !== urlOrId),
 								},
