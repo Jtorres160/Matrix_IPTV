@@ -158,11 +158,26 @@ export const useProfilesStore = create(
 					const profile = state.profiles[active];
 					let recent = profile.recentlyWatched || [];
 					
-					// Remove duplicate if exists
-					recent = recent.filter(id => id !== channelId);
+					// Remove duplicate if exists (checking both old string format and new object format)
+					const existingItem = recent.find(item => 
+						(typeof item === 'string' && item === channelId) || 
+						(typeof item === 'object' && item.channelId === channelId)
+					);
+					
+					recent = recent.filter(item => 
+						typeof item === 'string' ? item !== channelId : item.channelId !== channelId
+					);
+					
+					const watchDuration = existingItem && typeof existingItem === 'object' ? existingItem.watchDuration : 0;
+
+					const newItem = {
+						channelId,
+						timestamp: Date.now(),
+						watchDuration // This could be updated periodically by a player effect
+					};
 					
 					// Add to front and limit to 20
-					recent = [channelId, ...recent].slice(0, 20);
+					recent = [newItem, ...recent].slice(0, 20);
 					
 					return {
 						profiles: {
@@ -331,6 +346,15 @@ export const useProfilesStore = create(
 					for (const id in updatedProfiles) {
 						if (!updatedProfiles[id].favorites) {
 							updatedProfiles[id].favorites = [];
+						}
+						// Migrate recentlyWatched strings to objects
+						if (updatedProfiles[id].recentlyWatched && updatedProfiles[id].recentlyWatched.length > 0) {
+							updatedProfiles[id].recentlyWatched = updatedProfiles[id].recentlyWatched.map(item => {
+								if (typeof item === 'string') {
+									return { channelId: item, timestamp: Date.now(), watchDuration: 0 };
+								}
+								return item;
+							});
 						}
 						if (updatedProfiles[id].playlists && updatedProfiles[id].playlists.length > 0) {
 							const migratedPlaylists = updatedProfiles[id].playlists.map((p, idx) => {

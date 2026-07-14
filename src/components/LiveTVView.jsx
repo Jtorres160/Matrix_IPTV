@@ -1,56 +1,55 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/appStore.js';
 import { useActiveProfile, useProfilesStore } from '../profileStore.js';
-import { LucideSearch, LucideHeart, LucidePlayCircle, LucideTv, LucideCalendarDays, LucideImageOff } from 'lucide-react';
+import { LucideSearch, LucideHeart, LucidePlayCircle, LucideTv, LucideImageOff, LucideListVideo } from 'lucide-react';
 import { usePlayerStore } from '../player/playerStore.js';
+import FavoritesRail from './favorites/FavoritesRail.jsx';
+import EPGOverlay from './epg/EPGOverlay.jsx';
+import { useTVNavigation } from '../hooks/useTVNavigation.js';
 
 export default function LiveTVView() {
   const channels = useAppStore((s) => s.channels);
   const categories = useAppStore((s) => s.categories);
   const epgData = useAppStore((s) => s.epgData);
   const isLoadingPlaylist = useAppStore((s) => s.isLoadingPlaylist);
+  
   const activeCategory = useAppStore((s) => s.activeCategory);
   const setActiveCategory = useAppStore((s) => s.setActiveCategory);
+  
   const selectedChannel = useAppStore((s) => s.selectedChannel);
   const setSelectedChannel = useAppStore((s) => s.setSelectedChannel);
   
   const [searchQuery, setSearchQuery] = useState("");
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
   
   const activeProfile = useActiveProfile();
   const toggleFavorite = useProfilesStore((s) => s.toggleFavorite);
   const addRecentlyWatched = useProfilesStore((s) => s.addRecentlyWatched);
   
   const favorites = activeProfile?.favorites || [];
-  const recentlyWatched = activeProfile?.recentlyWatched || [];
+  const recentlyWatchedItems = activeProfile?.recentlyWatched || [];
   
-  const { activeUrl, setChannel, setPlaylist, playlist } = usePlayerStore();
+  const { activeUrl, setChannel, setPlaylist, playlist, activeChannel } = usePlayerStore();
 
   // Sync playlist to playerStore for navigation
   useEffect(() => {
-    // Only update if array references change substantially or length changes
     if (playlist.length !== channels.length) {
       setPlaylist(channels);
     }
   }, [channels, playlist.length, setPlaylist]);
 
-  // 1. FILTERING
+  // Remote-first TV navigation for the main view
+  useTVNavigation({
+    isActive: !isGuideOpen && !isLoadingPlaylist && channels.length > 0,
+    onGuideOpen: () => setIsGuideOpen(true)
+  });
+
+  // Filtering for All Channels list
   const filteredChannels = useMemo(() => {
     let result = channels;
-    
-    // Filter by category
     if (activeCategory) {
-      if (activeCategory === "Favorites") {
-        result = result.filter(c => favorites.includes(c.id));
-      } else if (activeCategory === "Recently Watched") {
-        // Sort by recency
-        result = result.filter(c => recentlyWatched.includes(c.id))
-                       .sort((a, b) => recentlyWatched.indexOf(a.id) - recentlyWatched.indexOf(b.id));
-      } else {
-        result = result.filter(c => c.groups.includes(activeCategory));
-      }
+      result = result.filter(c => c.groups.includes(activeCategory));
     }
-    
-    // Filter by search
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter(c => 
@@ -58,20 +57,11 @@ export default function LiveTVView() {
         c.groups.some(g => g.toLowerCase().includes(q))
       );
     }
-    
     return result;
-  }, [channels, activeCategory, searchQuery, favorites, recentlyWatched]);
+  }, [channels, activeCategory, searchQuery]);
 
-  // EPG Helper
   const getEpgForChannel = (tvgId) => {
     return epgData.get(tvgId) || [];
-  };
-
-  const currentEpg = selectedChannel ? getEpgForChannel(selectedChannel.tvgId) : [];
-
-  // Handlers
-  const handleSelectChannel = (channel) => {
-    setSelectedChannel(channel);
   };
 
   const handlePlayChannel = (channel) => {
@@ -89,104 +79,155 @@ export default function LiveTVView() {
     return <EmptyState icon={<LucideTv />} title="No Channels Available" subtitle="Go to Settings > Sources to add an M3U playlist." />;
   }
 
+  // RECENTLY WATCHED PROCESSING
+  // Ensure we map back to the channel object properly based on the new data model
+  const recentlyWatchedChannels = recentlyWatchedItems.map(item => {
+    // backward compatibility for string IDs
+    const id = typeof item === 'string' ? item : item.channelId;
+    const channel = channels.find(c => c.id === id);
+    if (!channel) return null;
+    return {
+      channel,
+      timestamp: item.timestamp || Date.now(),
+      watchDuration: item.watchDuration || 0
+    };
+  }).filter(Boolean);
+
   return (
-    <div className="flex flex-col h-full w-full bg-transparent overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-transparent overflow-y-auto no-scrollbar relative z-10 scroll-smooth">
       
-      {/* ── TOP RIBBON: CATEGORIES & SEARCH ── */}
-      <div className="h-16 flex-none bg-black/90 backdrop-blur-xl border-b border-gray-800 flex items-center px-4 gap-4 z-20">
-        <CategoryRibbon 
-          categories={categories} 
-          activeCategory={activeCategory} 
-          setActiveCategory={setActiveCategory} 
-        />
-        <div className="relative w-64 shrink-0">
-          <LucideSearch size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input 
-            type="text" 
-            placeholder="Search channels..." 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white/10 border border-white/10 rounded-full py-1.5 pl-9 pr-4 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-          />
+      {/* ── LIVE TV HERO (TRANSPARENT HOLE) ── */}
+      {/* Takes up most of the screen, allowing Layer 0 video to shine through */}
+      <div className="w-full h-[60vh] flex flex-col justify-between p-12 bg-gradient-to-b from-black/80 via-transparent to-black pointer-events-none">
+        
+        {/* Top Header Layer */}
+        <div className="flex justify-between items-start pointer-events-auto">
+          <div className="flex gap-4 items-center">
+            <button 
+              data-tv-focusable="true"
+              onClick={() => setIsGuideOpen(true)}
+              className="px-6 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white font-bold transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 flex items-center gap-2"
+            >
+              <LucideListVideo size={18} />
+              Open Guide (G)
+            </button>
+          </div>
+          
+          <div className="relative w-64 shrink-0">
+            <LucideSearch size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input 
+              type="text" 
+              placeholder="Search..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-black/50 backdrop-blur-md border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+            />
+          </div>
         </div>
+
+        {/* Bottom Hero Layer (Context for currently playing video) */}
+        {activeChannel ? (
+           <div className="pointer-events-auto mb-8">
+              <span className="px-3 py-1 bg-red-600 text-white text-xs font-bold tracking-widest uppercase rounded shadow-sm mb-3 inline-block">Live</span>
+              <h1 className="text-6xl font-black text-white drop-shadow-2xl max-w-4xl tracking-tight mb-2">
+                {activeChannel.name}
+              </h1>
+              <p className="text-xl text-gray-300 drop-shadow-md font-medium">
+                {activeChannel.groups?.[0]}
+              </p>
+           </div>
+        ) : (
+          <div className="pointer-events-auto mb-8">
+            <h1 className="text-5xl font-black text-white drop-shadow-2xl tracking-tight mb-2">Live TV</h1>
+            <p className="text-xl text-gray-300 drop-shadow-md">Select a channel to start watching.</p>
+          </div>
+        )}
       </div>
 
-      {/* ── MAIN SPLIT ── */}
-      <div className="flex-1 flex overflow-hidden">
+      {/* ── HOME LAYOUT SECTIONS ── */}
+      <div className="w-full min-h-[40vh] bg-[#050c0e] flex flex-col pb-20 relative z-20 shadow-[0_-20px_50px_rgba(0,0,0,0.8)]">
         
-        {/* LEFT SIDEBAR: CHANNEL LIST (VIRTUALIZED) */}
-        <div className="w-[420px] flex-none bg-[#050c0e]/95 backdrop-blur-xl border-r border-gray-800 flex flex-col z-20 shadow-2xl">
-          <div className="px-5 py-3 border-b border-gray-800/50 flex justify-between items-center text-xs text-gray-400 uppercase tracking-wider font-semibold">
-            <span>{filteredChannels.length} Channels</span>
-          </div>
+        {/* RECENTLY WATCHED / CONTINUE WATCHING */}
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold text-white px-8 mb-2 tracking-tight">Continue Watching</h2>
+          {recentlyWatchedChannels.length > 0 ? (
+            <div className="flex overflow-x-auto no-scrollbar scroll-smooth gap-4 px-8 pb-4 pt-2">
+              {recentlyWatchedChannels.map(({channel, timestamp}, idx) => (
+                <button
+                  key={idx}
+                  data-tv-focusable="true"
+                  onClick={() => handlePlayChannel(channel)}
+                  className="group relative flex-shrink-0 w-64 h-36 rounded-xl overflow-hidden bg-white/5 border border-transparent transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 focus:z-10 focus:border-white/20 text-left hover:bg-white/10"
+                >
+                  <div className="absolute inset-0 flex items-center justify-center p-4">
+                     {channel.logo ? (
+                       <img src={channel.logo} className="w-full h-full object-contain opacity-40 group-focus:opacity-100 group-hover:opacity-100 transition-opacity" />
+                     ) : (
+                       <LucideImageOff size={48} className="text-gray-700 opacity-50" />
+                     )}
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent p-4 flex flex-col justify-end">
+                    <h4 className="text-white font-bold truncate text-lg drop-shadow-md">{channel.name}</h4>
+                    <p className="text-xs text-gray-400 truncate">
+                      {new Date(timestamp).toLocaleDateString()}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+             <div className="px-8 py-6 text-gray-500 italic text-sm">
+                Start watching channels. Your history will appear here.
+             </div>
+          )}
+        </div>
+
+        {/* FAVORITES */}
+        <div className="mt-4">
+          <h2 className="text-2xl font-bold text-white px-8 mb-2 tracking-tight">Favorites</h2>
+          <FavoritesRail channels={channels} favorites={favorites} onPlay={handlePlayChannel} />
+        </div>
+
+        {/* ALL CHANNELS (CATEGORIES & VIRTUALIZED LIST) */}
+        <div className="mt-8 flex-1 flex flex-col px-8">
+          <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">All Channels</h2>
           
-          <div className="flex-1">
-            {filteredChannels.length > 0 ? (
-              <VirtualizedChannelList 
-                channels={filteredChannels} 
-                selectedChannel={selectedChannel}
-                activeUrl={activeUrl}
-                onSelect={handleSelectChannel}
-                onPlay={handlePlayChannel}
-                favorites={favorites}
-                onToggleFavorite={toggleFavorite}
-                getEpgForChannel={getEpgForChannel}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500">
-                <LucideSearch size={32} className="mb-2 opacity-50" />
-                <p>No channels found.</p>
-              </div>
-            )}
+          <CategoryRibbon 
+            categories={categories} 
+            activeCategory={activeCategory} 
+            setActiveCategory={setActiveCategory} 
+          />
+          
+          <div className="mt-6 flex-1 min-h-[500px]">
+             {filteredChannels.length > 0 ? (
+               <VirtualizedChannelList 
+                 channels={filteredChannels} 
+                 activeUrl={activeUrl}
+                 onPlay={handlePlayChannel}
+                 favorites={favorites}
+                 onToggleFavorite={toggleFavorite}
+                 getEpgForChannel={getEpgForChannel}
+               />
+             ) : (
+               <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                 <LucideSearch size={32} className="mb-2 opacity-50" />
+                 <p>No channels found.</p>
+               </div>
+             )}
           </div>
         </div>
-        
-        {/* RIGHT SIDE: PLAYER HOLE & EPG */}
-        <div className="flex-1 flex flex-col relative">
-          
-          {/* TOP: NOW PLAYING (TRANSPARENT HOLE) */}
-          {/* We leave this area completely transparent so Layer 0 (Player) shows through */}
-          <div className="flex-1 bg-transparent pointer-events-none" />
-          
-          {/* BOTTOM: PROGRAM GUIDE / EPG */}
-          <div className="h-72 flex-none bg-[#0a1f22]/95 backdrop-blur-2xl border-t border-gray-800 z-20 shadow-[0_-10px_30px_rgba(0,0,0,0.5)]">
-            {selectedChannel ? (
-              <div className="h-full flex flex-col p-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex items-center gap-4 mb-4">
-                  <h2 className="text-2xl font-bold text-white truncate">{selectedChannel.name}</h2>
-                  <span className="px-2 py-0.5 bg-red-600 text-white text-[10px] font-bold tracking-widest uppercase rounded shadow-sm">Live</span>
-                  <span className="text-gray-500 text-sm">{selectedChannel.groups[0] || 'Unknown'}</span>
-                </div>
-                
-                {currentEpg.length > 0 ? (
-                  <div className="flex-1 overflow-y-auto pr-4 space-y-4">
-                    {currentEpg.map((prog, i) => (
-                      <div key={i} className="flex gap-4 group">
-                        <div className="w-32 shrink-0 text-sm font-medium text-blue-400 pt-0.5">{prog.time}</div>
-                        <div className="flex-1">
-                          <h4 className="text-white font-semibold mb-1 group-hover:text-blue-300 transition-colors">{prog.title}</h4>
-                          <p className="text-sm text-gray-400 line-clamp-2">{prog.desc}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
-                    <LucideCalendarDays size={32} className="mb-3 opacity-30" />
-                    <p>No program guide available for this channel.</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="h-full flex items-center justify-center text-gray-500 flex-col gap-3">
-                <LucideTv size={32} className="opacity-30" />
-                <span>Select a channel to view the program guide.</span>
-              </div>
-            )}
-          </div>
-          
-        </div>
+
       </div>
+
+      {/* EPG Overlay Modal */}
+      <EPGOverlay 
+        isOpen={isGuideOpen} 
+        onClose={() => setIsGuideOpen(false)} 
+        channels={channels}
+        epgData={epgData}
+        activeChannel={activeChannel}
+        onPlayChannel={handlePlayChannel}
+      />
     </div>
   );
 }
@@ -198,67 +239,77 @@ export default function LiveTVView() {
 function CategoryRibbon({ categories, activeCategory, setActiveCategory }) {
   const containerRef = useRef(null);
 
-  const allTabs = ["All Channels", "Favorites", "Recently Watched", ...categories];
-
   return (
     <div 
-      className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth" 
+      className="flex items-center gap-3 overflow-x-auto no-scrollbar scroll-smooth pb-2" 
       ref={containerRef}
     >
-      {allTabs.map(cat => {
-        const isFav = cat === "Favorites";
-        const isAll = cat === "All Channels";
-        const isActive = 
-          (isAll && activeCategory === null) || 
-          (activeCategory === cat);
-
-        return (
-          <button
-            key={cat}
-            onClick={() => setActiveCategory(isAll ? null : cat)}
-            className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-2 ${
-              isActive 
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/30' 
-                : 'bg-white/5 text-gray-300 hover:bg-white/10'
-            }`}
-          >
-            {isFav && <LucideHeart size={14} className={isActive ? 'text-white' : 'text-red-500'} />}
-            {cat}
-          </button>
-        );
-      })}
+      <button
+        data-tv-focusable="true"
+        onClick={() => setActiveCategory(null)}
+        className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 ${
+          activeCategory === null
+            ? 'bg-blue-600 text-white shadow-lg' 
+            : 'bg-white/5 text-gray-300 hover:bg-white/10'
+        }`}
+      >
+        All
+      </button>
+      {categories.map(cat => (
+        <button
+          key={cat}
+          data-tv-focusable="true"
+          onClick={() => setActiveCategory(cat)}
+          className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 ${
+            activeCategory === cat 
+              ? 'bg-blue-600 text-white shadow-lg' 
+              : 'bg-white/5 text-gray-300 hover:bg-white/10'
+          }`}
+        >
+          {cat}
+        </button>
+      ))}
     </div>
   );
 }
 
-// Custom Virtualizer for 0-dependency, high-performance rendering
-function VirtualizedChannelList({ channels, selectedChannel, activeUrl, onSelect, onPlay, favorites, onToggleFavorite, getEpgForChannel }) {
+// Custom Virtualizer for full window scrolling compatibility
+function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onToggleFavorite, getEpgForChannel }) {
   const [scrollTop, setScrollTop] = useState(0);
-  const [height, setHeight] = useState(0);
+  const [height, setHeight] = useState(600); // Default assumption for the block
   const containerRef = useRef(null);
 
   useEffect(() => {
-    if (containerRef.current) setHeight(containerRef.current.clientHeight);
-    const ob = new ResizeObserver(entries => {
-      if (entries[0]) setHeight(entries[0].contentRect.height);
-    });
-    if (containerRef.current) {
-      ob.observe(containerRef.current);
+    const handleScroll = () => {
+      if (containerRef.current) {
+        // Calculate the scroll position relative to the container
+        const rect = containerRef.current.getBoundingClientRect();
+        // Since the main view scrolls, we use bounding client rect to determine visible area
+        // A full virtualization requires more math, but a simplified sliding window works well
+        const offsetTop = -rect.top + window.innerHeight * 0.5; // Rough estimate of view center
+        setScrollTop(Math.max(0, offsetTop));
+      }
+    };
+    
+    // Listen to parent scroll container (the main div)
+    const parent = document.querySelector('.overflow-y-auto');
+    if (parent) {
+      parent.addEventListener('scroll', handleScroll, { passive: true });
+      return () => parent.removeEventListener('scroll', handleScroll);
     }
-    return () => ob.disconnect();
   }, []);
 
-  const ITEM_HEIGHT = 72; // Increased for logo & richer card
+  const ITEM_HEIGHT = 80; 
   const totalHeight = channels.length * ITEM_HEIGHT;
   
-  const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 3);
-  const endIndex = Math.min(channels.length - 1, Math.ceil((scrollTop + height) / ITEM_HEIGHT) + 3);
+  // Very generous buffer to account for the simplified scroll logic
+  const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 10);
+  const endIndex = Math.min(channels.length - 1, startIndex + 30);
 
   const visibleItems = [];
   
   for (let i = startIndex; i <= endIndex; i++) {
     const channel = channels[i];
-    const isSelected = selectedChannel?.id === channel.id;
     const isPlaying = activeUrl === channel.url;
     const isFav = favorites.includes(channel.id);
     const epg = getEpgForChannel(channel.tvgId);
@@ -268,56 +319,50 @@ function VirtualizedChannelList({ channels, selectedChannel, activeUrl, onSelect
       <div 
         key={channel.id || i}
         style={{ position: 'absolute', top: i * ITEM_HEIGHT, left: 0, right: 0, height: ITEM_HEIGHT }}
-        className="px-3 py-1"
+        className="py-1"
       >
         <div 
-          onClick={() => onSelect(channel)}
-          onDoubleClick={() => onPlay(channel)}
-          className={`h-full flex items-center px-3 rounded-xl cursor-pointer transition-colors group ${
-            isSelected 
-              ? 'bg-blue-600/10 border border-blue-500/30' 
-              : 'hover:bg-white/5 border border-transparent'
+          data-tv-focusable="true"
+          onClick={() => onPlay(channel)}
+          className={`h-full flex items-center px-4 rounded-xl cursor-pointer transition-all group focus:outline-none focus:ring-4 focus:ring-blue-500 focus:z-10 ${
+            isPlaying 
+              ? 'bg-blue-600/20 border-l-4 border-blue-500' 
+              : 'hover:bg-white/5 bg-white/5 border-l-4 border-transparent'
           }`}
         >
           {/* Logo */}
-          <div className="shrink-0 mr-3">
-            <ChannelLogo url={channel.logo} name={channel.name} />
+          <div className="shrink-0 mr-4 w-12 h-12 rounded bg-black/40 flex items-center justify-center p-1">
+             {channel.logo ? (
+               <img src={channel.logo} className="w-full h-full object-contain" onError={(e) => e.target.style.display = 'none'} />
+             ) : (
+               <LucideImageOff size={20} className="text-gray-600" />
+             )}
           </div>
 
           {/* Details */}
-          <div className="truncate pr-2 flex-1">
-            <div className="flex items-center gap-2">
-              <div className={`font-semibold text-sm truncate ${isSelected ? 'text-blue-400' : 'text-gray-200'}`}>
+          <div className="truncate pr-4 flex-1">
+            <div className="flex items-center gap-3">
+              <h3 className={`font-bold text-lg truncate ${isPlaying ? 'text-blue-400' : 'text-gray-100'}`}>
                 {channel.name}
-              </div>
-              {isPlaying && <span className="flex shrink-0 w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]" title="Currently Playing"></span>}
+              </h3>
+              {isPlaying && <span className="flex shrink-0 w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>}
             </div>
-            <div className="text-xs text-gray-500 truncate mt-0.5">
+            <p className="text-sm text-gray-400 truncate mt-0.5">
               {currentProgram}
-            </div>
+            </p>
           </div>
           
           {/* Actions */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-3 shrink-0">
             <button 
-              onClick={(e) => { e.stopPropagation(); onPlay(channel); }}
-              className={`p-1.5 rounded-full transition-colors focus:outline-none ${
-                isPlaying 
-                  ? 'bg-green-500/20 text-green-400' 
-                  : 'bg-blue-600/20 text-blue-400 opacity-0 group-hover:opacity-100 hover:bg-blue-600 hover:text-white'
-              }`}
-              title="Play Channel"
-            >
-              <LucidePlayCircle size={16} />
-            </button>
-            <button 
+              data-tv-focusable="true"
               onClick={(e) => { e.stopPropagation(); onToggleFavorite(channel.id); }}
-              className="p-1.5 rounded-full hover:bg-white/10 transition-colors focus:outline-none"
+              className="p-2 rounded-full hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-white z-20"
               title="Toggle Favorite"
             >
               <LucideHeart 
-                size={16} 
-                className={isFav ? 'fill-red-500 text-red-500' : 'text-gray-600 opacity-0 group-hover:opacity-100'} 
+                size={20} 
+                className={isFav ? 'fill-red-500 text-red-500' : 'text-gray-600 opacity-50 group-hover:opacity-100'} 
               />
             </button>
           </div>
@@ -327,11 +372,7 @@ function VirtualizedChannelList({ channels, selectedChannel, activeUrl, onSelect
   }
 
   return (
-    <div 
-      ref={containerRef} 
-      onScroll={(e) => setScrollTop(e.target.scrollTop)}
-      className="w-full h-full overflow-y-auto no-scrollbar relative"
-    >
+    <div ref={containerRef} className="w-full relative">
       <div style={{ height: totalHeight, position: 'relative', width: '100%' }}>
         {visibleItems}
       </div>
@@ -339,37 +380,13 @@ function VirtualizedChannelList({ channels, selectedChannel, activeUrl, onSelect
   );
 }
 
-// Graceful fallback logo component
-function ChannelLogo({ url, name }) {
-  const [error, setError] = useState(false);
-
-  if (!url || error) {
-    // Fallback: Initial letter or Icon
-    return (
-      <div className="w-10 h-10 rounded bg-[#123236] border border-gray-700 flex items-center justify-center text-gray-400 shadow-inner">
-        {name ? name.charAt(0).toUpperCase() : <LucideImageOff size={16} />}
-      </div>
-    );
-  }
-
-  return (
-    <img 
-      src={url} 
-      alt={name} 
-      onError={() => setError(true)}
-      className="w-10 h-10 rounded object-contain bg-white/5 border border-gray-800"
-      loading="lazy"
-    />
-  );
-}
-
 function EmptyState({ icon, title, subtitle }) {
   return (
     <div className="flex flex-col items-center justify-center h-full w-full bg-[#050c0e] text-center p-8 z-20 relative">
-      <div className="w-20 h-20 bg-blue-900/10 text-blue-500 rounded-full flex items-center justify-center mb-6 shadow-inner border border-blue-900/30">
-        {React.cloneElement(icon, { size: 36 })}
+      <div className="w-24 h-24 bg-blue-900/10 text-blue-500 rounded-full flex items-center justify-center mb-6 shadow-inner border border-blue-900/30">
+        {React.cloneElement(icon, { size: 48 })}
       </div>
-      <h2 className="text-2xl font-bold text-white mb-2">{title}</h2>
+      <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">{title}</h2>
       <p className="text-gray-400 max-w-md">{subtitle}</p>
     </div>
   );
