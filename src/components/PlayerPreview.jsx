@@ -6,6 +6,7 @@ import PlayerStatus from './player/PlayerStatus.jsx';
 import PlayerOverlay from './player/PlayerOverlay.jsx';
 import MpegtsPlayer from './player/MpegtsPlayer.jsx';
 import { useAppStore } from '../store/appStore.js';
+import { useResumeStore } from '../store/resumeStore.js';
 
 export default function PlayerPreview({ playerPreference }) {
   const containerRef = useRef(null);
@@ -33,7 +34,12 @@ export default function PlayerPreview({ playerPreference }) {
     previousChannel,
     nextChannel,
     videoFit,
-    setMediaHandles
+    setMediaHandles,
+    isVOD,
+    duration,
+    currentTime,
+    setDuration,
+    setCurrentTime
   } = usePlayerStore();
 
   const [vlcAvailable, setVlcAvailable] = useState(false);
@@ -233,6 +239,47 @@ export default function PlayerPreview({ playerPreference }) {
     };
   }, [activeUrl, activeChannel, playerPreference, handleError]);
 
+  // --- Continue Watching: resume, persist, and clear playback position ---
+
+  // Resume-seek: once per source, jump to the saved position (<95%).
+  const resumedForRef = useRef(null);
+  useEffect(() => {
+    if (!isVOD || !activeChannel || !activeUrl) return;
+    if (resumedForRef.current === activeUrl) return;
+    if (!duration || duration <= 0) return; // wait until we know the length
+    const entry = useResumeStore.getState().getPosition(activeChannel.id);
+    resumedForRef.current = activeUrl;
+    if (entry && entry.positionSec < 0.95 * duration) {
+      usePlayerStore.getState().seek(entry.positionSec);
+      try { playerRef.current?.seekTo?.(entry.positionSec, 'seconds'); } catch (e) { /* ignore */ }
+    }
+  }, [isVOD, activeChannel, activeUrl, duration]);
+
+  // Saver: throttle-persist position for on-demand content; clear at ≥95%.
+  const lastSaveRef = useRef(0);
+  useEffect(() => {
+    if (!isVOD || !activeChannel || !duration) return;
+    if (currentTime >= 0.95 * duration) {
+      useResumeStore.getState().clearPosition(activeChannel.id);
+      return;
+    }
+    const now = Date.now();
+    if (now - lastSaveRef.current >= 5000) {
+      lastSaveRef.current = now;
+      useResumeStore.getState().savePosition(activeChannel, currentTime, duration);
+    }
+  }, [isVOD, activeChannel, currentTime, duration]);
+
+  // Persist once more on unmount / source change (capture the last position).
+  const tailRef = useRef({ activeChannel, currentTime, duration, isVOD });
+  tailRef.current = { activeChannel, currentTime, duration, isVOD };
+  useEffect(() => () => {
+    const t = tailRef.current;
+    if (t.isVOD && t.activeChannel && t.duration && t.currentTime < 0.95 * t.duration) {
+      useResumeStore.getState().savePosition(t.activeChannel, t.currentTime, t.duration);
+    }
+  }, [activeUrl]);
+
   if (!activeChannel) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-sm bg-black w-full h-full relative z-0">
@@ -289,6 +336,9 @@ export default function PlayerPreview({ playerPreference }) {
             playing={playbackState === 'playing' || playbackState === 'buffering'}
             volume={volume}
             muted={muted}
+            progressInterval={1000}
+            onDuration={(d) => setDuration(d || 0)}
+            onProgress={({ playedSeconds }) => setCurrentTime(playedSeconds || 0)}
             onReady={() => {
               if (window.electronLog) window.electronLog.write('info', `[PlayerPreview] Video Ready / HLS Initialized for: ${activeUrl}`);
               console.log(`[PlayerPreview] Video Ready / HLS Initialized for: ${activeUrl}`);
@@ -315,6 +365,8 @@ export default function PlayerPreview({ playerPreference }) {
               // Series autoplay: roll to the next episode when one finishes.
               // Live streams never fire onEnded, so this only affects VOD/series.
               const advanced = usePlayerStore.getState().playNextInSeries();
+              const ch = usePlayerStore.getState().activeChannel;
+              if (ch) useResumeStore.getState().clearPosition(ch.id);
               if (!advanced) setPlaybackState('paused');
             }}
             onError={(e) => {

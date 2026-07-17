@@ -84,7 +84,7 @@ export const usePlayerStore = create((set, get) => ({
       errorInfo: null,
       retryCount: 0,
       reconnecting: false,
-      isVOD: !!channel.isRecording,
+      isVOD: !!channel.isRecording || channel.type === 'movie' || channel.type === 'series',
       duration: 0,
       currentTime: 0,
       seekRequest: null
