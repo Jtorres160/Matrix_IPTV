@@ -27,6 +27,12 @@ export const usePlayerStore = create((set, get) => ({
   // stretch.
   videoFit: 'contain',
 
+  // VOD (recorded-file) playback: real duration/position + one-shot seek target.
+  isVOD: false,
+  duration: 0,
+  currentTime: 0,
+  seekRequest: null, // seconds; MpegtsPlayer consumes then clears via clearSeekRequest
+
   // Live handles to the underlying media element / hls.js instance, published
   // by PlayerPreview on ready so the track menu can enumerate + switch audio and
   // subtitle tracks. Non-reactive; read on demand.
@@ -77,10 +83,24 @@ export const usePlayerStore = create((set, get) => ({
       playbackState: 'buffering',
       errorInfo: null,
       retryCount: 0,
-      reconnecting: false
+      reconnecting: false,
+      isVOD: !!channel.isRecording,
+      duration: 0,
+      currentTime: 0,
+      seekRequest: null
     });
     get().showControlsTemporarily();
   },
+
+  setDuration: (sec) => set({ duration: Number.isFinite(sec) ? sec : 0 }),
+  setCurrentTime: (sec) => set({ currentTime: Number.isFinite(sec) ? sec : 0 }),
+  seek: (sec) => {
+    const { duration } = get();
+    const clamped = Math.max(0, Math.min(sec, duration || sec));
+    set({ seekRequest: clamped, currentTime: clamped });
+    get().showControlsTemporarily();
+  },
+  clearSeekRequest: () => set({ seekRequest: null }),
 
   setVideoFit: (fit) => set({ videoFit: fit }),
   cycleVideoFit: () => {
