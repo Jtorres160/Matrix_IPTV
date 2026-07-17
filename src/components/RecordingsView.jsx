@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import RecordingLibrary from './RecordingLibrary.jsx';
 import RecordingDashboard from './RecordingDashboard.jsx';
+import ScheduledList from './ScheduledList.jsx';
 
 const SEGMENTS = [
   { id: 'library', label: 'Library' },
+  { id: 'scheduled', label: 'Scheduled' },
   { id: 'active', label: 'Active' },
 ];
 
@@ -29,7 +31,9 @@ export default function RecordingsView() {
         ))}
       </div>
       <div className="flex-1 overflow-y-auto">
-        {segment === 'library' ? <RecordingLibrary /> : <RecordingDashboard />}
+        {segment === 'library' ? <RecordingLibrary />
+          : segment === 'scheduled' ? <ScheduledList />
+          : <RecordingDashboard />}
       </div>
     </div>
   );
