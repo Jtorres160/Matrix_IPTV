@@ -16,6 +16,7 @@ import GlobalLoader from "./components/GlobalLoader.jsx";
 import ViewRouter from "./components/ViewRouter.jsx";
 import PlayerPreview from "./components/PlayerPreview.jsx";
 import SettingsDrawer from "./components/SettingsDrawer.jsx";
+import AutoplayResume from "./components/AutoplayResume.jsx";
 
 export default function App() {
   useMediaKeys();
@@ -106,14 +107,13 @@ export default function App() {
     }
   }, [currentView]);
 
+  // Apply custom User-Agent (Settings > Advanced) to all provider requests
+  const customUserAgent = activeSettings?.customUserAgent || '';
   useEffect(() => {
-    if (autoRefresh) {
-      const interval = setInterval(() => {
-        console.log("[Matrix_IPTV] Auto-refresh triggered.");
-      }, 60000);
-      return () => clearInterval(interval);
+    if (window.electronSession) {
+      window.electronSession.setUserAgent(customUserAgent).catch(() => {});
     }
-  }, [autoRefresh]);
+  }, [customUserAgent]);
 
   const activePlaylistUrl = activeProfile?.playlists?.[0]?.url;
 
@@ -129,18 +129,21 @@ export default function App() {
     }
   }, [activeProfile?.id, activePlaylistUrl]);
 
-  // Handle EPG Fetching
+  // Handle EPG Fetching. A custom XMLTV URL (Settings > Guide & Data)
+  // overrides the playlist's x-tvg-url header.
+  const epgUrlOverride = (activeSettings?.epgUrlOverride || '').trim();
+  const effectiveEpgUrl = epgUrlOverride || epgUrl;
   useEffect(() => {
     async function loadEPG() {
-      if (!epgUrl) {
+      if (!effectiveEpgUrl) {
         setEpgData(new Map());
         return;
       }
       setIsLoadingEpg(true);
       setPlaylistMessage(prev => prev + ' Loading EPG...');
-      console.log(`[Matrix_IPTV] Fetching EPG from: ${epgUrl}`);
+      console.log(`[Matrix_IPTV] Fetching EPG from: ${effectiveEpgUrl}`);
       try {
-        const epg = await fetchAndParseEPG(epgUrl);
+        const epg = await fetchAndParseEPG(effectiveEpgUrl);
         setEpgData(epg);
         setPlaylistMessage(prev => prev.replace('Loading EPG...', `Loaded EPG for ${epg.size} channels.`));
         console.log(`[Matrix_IPTV] EPG loaded for ${epg.size} channels.`);
@@ -151,7 +154,7 @@ export default function App() {
       }
     }
     loadEPG();
-  }, [epgUrl]);
+  }, [effectiveEpgUrl]);
 
   const updateMediaState = (rawChannels, playlistId) => {
     if (!rawChannels || rawChannels.length === 0) {
@@ -177,9 +180,12 @@ export default function App() {
       setSelectedChannel(null);
       setIsLoadingPlaylist(false);
       setPlaylistMessage(`Loaded ${cached.channelCount} channels from cache.`);
-      
-      // Silently refresh in background
-      refreshPlaylist(playlist, true);
+
+      // Silently refresh in background when auto-refresh is enabled
+      // (Settings > Advanced). Manual refresh stays available in Sources.
+      if (autoRefresh) {
+        refreshPlaylist(playlist, true);
+      }
     } else {
       // No cache, block and load
       refreshPlaylist(playlist, false);
@@ -326,6 +332,8 @@ export default function App() {
   return (
     <div className={`relative w-screen h-screen overflow-hidden font-sans ${darkMode ? "bg-[#0a1f22] text-gray-100" : "bg-gray-100 text-gray-900"}`}>
       
+      <AutoplayResume enabled={!!activeSettings?.autoplayLastChannel} />
+
       {/* LAYER 0: Background Player */}
       <div className={`absolute inset-0 bg-black ${isImmersivePlayer || currentView === 'player' ? 'z-50' : 'z-0'}`}>
         <PlayerPreview playerPreference={playerPreference} />

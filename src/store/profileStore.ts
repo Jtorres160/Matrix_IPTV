@@ -41,6 +41,12 @@ export type ProfileSettings = {
 	parentalPin?: string
 	/** Phase 10: TMDB API Key for metadata */
 	tmdbApiKey?: string
+	/** Resume the last watched channel automatically on app launch */
+	autoplayLastChannel?: boolean
+	/** Custom User-Agent sent with playlist/EPG/stream requests (empty = default) */
+	customUserAgent?: string
+	/** Custom XMLTV EPG URL; overrides the playlist's x-tvg-url header when set */
+	epgUrlOverride?: string
 }
 
 /** Rich playlist object (Live TV pipeline). Legacy string playlists are coerced on load. */
@@ -142,11 +148,15 @@ type ProfilesState = {
 const DEFAULT_SETTINGS: ProfileSettings = {
 	theme: 'dark',
 	playerPreference: 'internal',
-	autoRefresh: false,
+	// Refresh playlists/EPG silently on startup so channel lists stay current
+	autoRefresh: true,
 	epgScale: 'normal',
 	colorOverlay: 'semi-transparent',
 	channelColumnWidth: 300,
 	tmdbApiKey: '',
+	autoplayLastChannel: false,
+	customUserAgent: '',
+	epgUrlOverride: '',
 }
 
 const STORAGE_KEY = 'iptv.profiles.v2'

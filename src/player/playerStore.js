@@ -32,6 +32,11 @@ export const usePlayerStore = create((set, get) => ({
     // Clear any pending retry loops
     if (retryTimeout) clearTimeout(retryTimeout);
 
+    // Remember the last channel for "resume on launch" (Settings > Playback)
+    try {
+      if (channel?.id != null) localStorage.setItem('matrix_last_channel_id', String(channel.id));
+    } catch (e) { /* storage unavailable — non-fatal */ }
+
     set({
       activeChannel: channel,
       activeUrl: channel.url,

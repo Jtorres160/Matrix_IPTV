@@ -127,6 +127,25 @@ function createWindow() {
   // --- *** END OF CHANGE *** ---
 }
 
+// ── Custom User-Agent (Settings > Advanced) ─────────────────────────────────
+// Applies to every request the renderer makes: playlist downloads, EPG
+// fetches and stream requests. An empty/blank value restores the default.
+const { session } = require('electron');
+let defaultUserAgent = null;
+ipcMain.handle('session:setUserAgent', (event, ua) => {
+  try {
+    const ses = session.defaultSession;
+    if (defaultUserAgent === null) defaultUserAgent = ses.getUserAgent();
+    const value = typeof ua === 'string' ? ua.trim() : '';
+    ses.setUserAgent(value || defaultUserAgent);
+    logger.info(`User-Agent ${value ? 'set to: ' + value : 'reset to default'}`);
+    return { success: true };
+  } catch (err) {
+    logger.error('Failed to set User-Agent', err);
+    return { success: false, error: err.message };
+  }
+});
+
 // Electron Store IPC Handlers
 ipcMain.handle('store:get', async (event, key) => {
   if (!store) await initStore();

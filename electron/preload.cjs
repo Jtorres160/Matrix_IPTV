@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('desktop', {
   isElectron: true
 });
 
+// Session-level configuration (custom User-Agent for providers)
+contextBridge.exposeInMainWorld('electronSession', {
+  setUserAgent: (ua) => ipcRenderer.invoke('session:setUserAgent', ua)
+});
+
 // Expose Recording Engine API safely
 contextBridge.exposeInMainWorld('electronRecording', {
   start: (streamId, url, filename) => ipcRenderer.invoke('recording:start', streamId, url, filename),
