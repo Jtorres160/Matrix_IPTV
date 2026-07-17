@@ -14,6 +14,8 @@ const { registerIPCHandlers, setMainWindow } = require('./ipcHandlers.cjs');
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Recorded-Files Library ──────────────────────────────────────────────────
+const { listRecordings, resolveRecordingPath, createRecordingServer } = require('./recordingLibrary.cjs');
+let recordingServer = null;
 // Single source of truth for where DVR captures live and are served from.
 function getRecordingsDir() {
   return path.join(app.getPath('downloads'), 'Matrix Recordings');
@@ -304,6 +306,27 @@ ipcMain.handle('recording:stop', async (event, streamId) => {
 ipcMain.handle('recording:status', async () => {
   return recordingManager.getStatus();
 });
+
+// ── Recorded-Files Library IPC ──────────────────────────────────────────────
+ipcMain.handle('recording:list', async () => {
+  return await listRecordings(getRecordingsDir());
+});
+
+ipcMain.handle('recording:delete', async (event, id) => {
+  try {
+    const filePath = resolveRecordingPath(getRecordingsDir(), id);
+    if (!filePath) return { success: false, error: 'Invalid recording id' };
+    await fs.promises.unlink(filePath);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+
+ipcMain.handle('recording:getPlaybackBaseUrl', async () => {
+  return recordingServer ? recordingServer.baseUrl : null;
+});
+// ────────────────────────────────────────────────────────────────────────────
 // --- *** END OF CHANGE *** ---
 
 // VLC IPC Handlers
@@ -435,7 +458,17 @@ app.whenReady().then(async () => {
     registerIPCHandlers(mainWindow);
   }
   // ────────────────────────────────────────────────────────────────────────
-  
+
+  // ── Recorded-Files Library: start the loopback playback server ──────────
+  try {
+    fs.mkdirSync(getRecordingsDir(), { recursive: true });
+    recordingServer = await createRecordingServer(getRecordingsDir());
+    logger.info(`[Recordings] server on ${recordingServer.baseUrl}`);
+  } catch (e) {
+    logger.error('[Recordings] server failed to start', e);
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
   logger.info('APP_READY');
 });
 app.on('window-all-closed', () => {
@@ -459,4 +492,5 @@ app.on('before-quit', () => {
   // ── Phase 7: Close SQLite database gracefully ───────────────────────────
   closeDatabase();
   // ────────────────────────────────────────────────────────────────────────
+  if (recordingServer) { try { recordingServer.close(); } catch (e) { /* ignore */ } }
 });

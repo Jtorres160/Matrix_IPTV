@@ -38,7 +38,11 @@ contextBridge.exposeInMainWorld('electronRecording', {
     ipcRenderer.on('recording:progress', subscription);
     // Return a cleanup function so React can safely unsubscribe
     return () => ipcRenderer.removeListener('recording:progress', subscription);
-  }
+  },
+  // Recorded-Files Library
+  list: () => ipcRenderer.invoke('recording:list'),
+  delete: (id) => ipcRenderer.invoke('recording:delete', id),
+  getPlaybackBaseUrl: () => ipcRenderer.invoke('recording:getPlaybackBaseUrl')
 });
 
 // Expose SQLite DB API safely
