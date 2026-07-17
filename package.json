@@ -22,6 +22,8 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "!electron/keygen.cjs",
+      "!electron/private-key.pem",
       "package.json"
     ],
     "win": {
