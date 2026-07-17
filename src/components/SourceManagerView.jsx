@@ -6,6 +6,8 @@ import { loadPlaylist } from '../lib/m3u/playlistService.js';
 import { savePlaylistToCache } from '../lib/m3u/playlistCache.js';
 import { resolveMediaItem } from '../lib/media/mediaResolver.js';
 import { toMediaItem } from '../lib/media/mediaAdapter.js';
+import { useEntitlementsStore } from '../store/entitlementsStore.js';
+import UpsellModal from './UpsellModal.jsx';
 
 export default function SourceManagerView() {
   const [activeTab, setActiveTab] = useState('m3u_url');
@@ -109,9 +111,16 @@ function M3uUrlManager() {
   const abortControllerRef = useRef(null);
   
   const addM3uPlaylist = useProfilesStore((s) => s.addM3uPlaylist);
-  
+  const isPro = useEntitlementsStore((s) => s.isPro());
+  const activeProfile = useActiveProfile();
+  const [upsellOpen, setUpsellOpen] = useState(false);
+
   const handleAdd = async () => {
     if (!url) return;
+    if (!isPro && (activeProfile?.playlists || []).length >= 1) {
+      setUpsellOpen(true);
+      return;
+    }
     if (isProcessing) {
        abortControllerRef.current?.abort();
     }
@@ -230,6 +239,11 @@ function M3uUrlManager() {
           </button>
         </div>
       </div>
+      <UpsellModal
+        open={upsellOpen}
+        onClose={() => setUpsellOpen(false)}
+        reason="The free tier includes 1 source. Add unlimited sources with Matrix Pro."
+      />
     </div>
   );
 }
@@ -610,11 +624,17 @@ function XtreamManager() {
 
   const addM3uPlaylist = useProfilesStore((s) => s.addM3uPlaylist);
   const activeProfile = useActiveProfile();
+  const isPro = useEntitlementsStore((s) => s.isPro());
+  const [upsellOpen, setUpsellOpen] = useState(false);
   const xtreamPlaylists = (activeProfile?.playlists || []).filter((p) => p.sourceKind === 'xtream' && p.serverUrl);
   const canSubmit = server.trim() && username.trim() && password.trim() && !isProcessing;
 
   const handleAdd = async () => {
     if (!canSubmit) return;
+    if (!isPro && (activeProfile?.playlists || []).length >= 1) {
+      setUpsellOpen(true);
+      return;
+    }
 
     const base = server.trim().replace(/\/+$/, '');
     if (!/^https?:\/\//i.test(base)) {
@@ -753,6 +773,11 @@ function XtreamManager() {
           </button>
         </div>
       </div>
+      <UpsellModal
+        open={upsellOpen}
+        onClose={() => setUpsellOpen(false)}
+        reason="The free tier includes 1 source. Add unlimited sources with Matrix Pro."
+      />
     </div>
   );
 }
