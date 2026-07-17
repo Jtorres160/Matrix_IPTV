@@ -6,6 +6,16 @@ import { readTracks, setAudioTrack, setSubtitleTrack } from '../../lib/player/tr
 
 const FIT_LABEL = { contain: 'Fit', cover: 'Fill', fill: 'Stretch' };
 
+function fmtTime(sec) {
+  if (!Number.isFinite(sec) || sec < 0) sec = 0;
+  const s = Math.floor(sec % 60);
+  const m = Math.floor((sec / 60) % 60);
+  const h = Math.floor(sec / 3600);
+  const mm = String(m).padStart(2, '0');
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+}
+
 export default function PlayerControls() {
   const {
     activeChannel,
@@ -17,6 +27,10 @@ export default function PlayerControls() {
     showControls,
     videoFit,
     mediaHandles,
+    isVOD,
+    duration,
+    currentTime,
+    seek,
     play,
     pause,
     toggleFullscreen,
@@ -110,18 +124,37 @@ export default function PlayerControls() {
             {activeChannel.groups?.[0] || 'Unknown Category'}
           </span>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1 bg-red-600/90 rounded text-xs font-bold tracking-widest uppercase text-white shadow-lg">
-          <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-          Live
-        </div>
+        {!isVOD && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-red-600/90 rounded text-xs font-bold tracking-widest uppercase text-white shadow-lg">
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+            Live
+          </div>
+        )}
       </div>
 
       {/* BOTTOM GRADIENT / CONTROLS */}
       <div className="w-full bg-gradient-to-t from-black/90 via-black/60 to-transparent p-6 pb-8 pointer-events-auto flex flex-col gap-4">
-        {/* Progress bar placeholder (Live TV doesn't really seek, but looks good) */}
-        <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
-          <div className="h-full bg-red-500 w-full rounded-full"></div>
-        </div>
+        {/* Progress bar: real seekbar for VOD recordings, decorative for live */}
+        {isVOD ? (
+          <div className="w-full flex items-center gap-3">
+            <span className="text-xs text-gray-300 tabular-nums w-14 text-right">{fmtTime(currentTime)}</span>
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              step="0.1"
+              value={Math.min(currentTime, duration || 0)}
+              onChange={(e) => seek(parseFloat(e.target.value))}
+              className="flex-1 h-1.5 bg-white/30 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              aria-label="Seek"
+            />
+            <span className="text-xs text-gray-400 tabular-nums w-14">{fmtTime(duration)}</span>
+          </div>
+        ) : (
+          <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
+            <div className="h-full bg-red-500 w-full rounded-full"></div>
+          </div>
+        )}
 
         <div className="flex items-center justify-between">
           
