@@ -47,6 +47,8 @@ export type ProfileSettings = {
 	customUserAgent?: string
 	/** Custom XMLTV EPG URL; overrides the playlist's x-tvg-url header when set */
 	epgUrlOverride?: string
+	/** Category names hidden from browsing lists */
+	hiddenCategories?: string[]
 }
 
 /** Rich playlist object (Live TV pipeline). Legacy string playlists are coerced on load. */
@@ -64,6 +66,10 @@ export type Playlist = {
 	serverUrl?: string
 	username?: string
 	password?: string
+	/** Per-playlist XMLTV EPG URL (e.g. Xtream xmltv.php) */
+	epgUrl?: string
+	/** Origin of the playlist: 'm3u' (default) or 'xtream' */
+	sourceKind?: string
 }
 
 export type UserProfile = {
@@ -157,6 +163,7 @@ const DEFAULT_SETTINGS: ProfileSettings = {
 	autoplayLastChannel: false,
 	customUserAgent: '',
 	epgUrlOverride: '',
+	hiddenCategories: [],
 }
 
 const STORAGE_KEY = 'iptv.profiles.v2'
@@ -542,7 +549,7 @@ export const useProfilesStore = create<ProfilesState>()(
 				},
 
 				addM3uPlaylist: (playlistData) => {
-					const { name, url, status, channelCount, lastUpdated, lastError } = playlistData
+					const { name, url, status, channelCount, lastUpdated, lastError, epgUrl, serverUrl, username, password, sourceKind } = playlistData
 					if (!url || !url.trim()) {
 						throw new Error('URL cannot be empty')
 					}
@@ -571,6 +578,11 @@ export const useProfilesStore = create<ProfilesState>()(
 							lastUpdated: lastUpdated || Date.now(),
 							lastError: lastError || null,
 							createdAt: Date.now(),
+							epgUrl: epgUrl || undefined,
+							serverUrl: serverUrl || undefined,
+							username: username || undefined,
+							password: password || undefined,
+							sourceKind: sourceKind || 'm3u',
 						}
 
 						return {

@@ -32,12 +32,11 @@ export default function SourceManagerView() {
             icon={<LucideFile size={18} />} 
             label="Local File" 
           />
-          <TabButton 
-            active={activeTab === 'xtream'} 
+          <TabButton
+            active={activeTab === 'xtream'}
             onClick={() => setActiveTab('xtream')}
-            icon={<LucideServer size={18} />} 
-            label="Xtream Codes" 
-            badge="Soon"
+            icon={<LucideServer size={18} />}
+            label="Xtream Codes"
           />
           <TabButton 
             active={activeTab === 'stalker'} 
@@ -61,7 +60,8 @@ export default function SourceManagerView() {
           <div className="max-w-4xl mx-auto space-y-12">
             {activeTab === 'm3u_url' && <M3uUrlManager />}
             {activeTab === 'local_file' && <LocalFileManager />}
-            {(activeTab === 'xtream' || activeTab === 'stalker') && <ComingSoonManager />}
+            {activeTab === 'xtream' && <XtreamManager />}
+            {activeTab === 'stalker' && <ComingSoonManager />}
             {activeTab === 'diagnostics' && <MediaDiagnostics />}
             
             <div className="border-t border-gray-700 pt-8 mt-12">
@@ -506,6 +506,155 @@ function StatusMessage({ status }) {
     <div className={`flex items-center gap-2 text-sm font-medium ${config.color} animate-in fade-in duration-300`}>
       {config.icon}
       <span>{status.msg}</span>
+    </div>
+  );
+}
+
+function XtreamManager() {
+  const [name, setName] = useState('');
+  const [server, setServer] = useState('');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [status, setStatus] = useState({ type: '', msg: '' });
+  const [isProcessing, setIsProcessing] = useState(false);
+  const abortControllerRef = useRef(null);
+
+  const addM3uPlaylist = useProfilesStore((s) => s.addM3uPlaylist);
+  const canSubmit = server.trim() && username.trim() && password.trim() && !isProcessing;
+
+  const handleAdd = async () => {
+    if (!canSubmit) return;
+
+    const base = server.trim().replace(/\/+$/, '');
+    if (!/^https?:\/\//i.test(base)) {
+      setStatus({ type: 'error', msg: 'Server URL must start with http:// or https://' });
+      return;
+    }
+
+    abortControllerRef.current = new AbortController();
+    setIsProcessing(true);
+
+    try {
+      // 1. Validate credentials against the Xtream player API
+      setStatus({ type: 'loading', msg: 'Signing in to provider...' });
+      const authUrl = `${base}/player_api.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+      const authRes = await fetch(authUrl, { signal: abortControllerRef.current.signal });
+      if (!authRes.ok) throw new Error(`Provider responded with HTTP ${authRes.status}`);
+      const auth = await authRes.json().catch(() => null);
+      const authOk = auth?.user_info && (auth.user_info.auth === 1 || auth.user_info.auth === '1' || auth.user_info.status === 'Active');
+      if (!authOk) {
+        setStatus({ type: 'error', msg: 'Login failed — check your username and password.' });
+        setIsProcessing(false);
+        return;
+      }
+
+      // 2. Download the full playlist through the standard get.php endpoint
+      const m3uUrl = `${base}/get.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}&type=m3u_plus&output=ts`;
+      const epgUrl = `${base}/xmltv.php?username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
+
+      setStatus({ type: 'loading', msg: 'Downloading channel list...' });
+      const result = await loadPlaylist(m3uUrl, abortControllerRef.current.signal, (state, msg) => {
+        setStatus({ type: 'loading', msg });
+      });
+
+      if (!result.success) {
+        setStatus({ type: 'error', msg: result.error || 'Could not download the channel list.' });
+        setIsProcessing(false);
+        return;
+      }
+
+      await savePlaylistToCache(m3uUrl, result);
+
+      // 3. Save as a playlist; the whole existing M3U pipeline takes over.
+      addM3uPlaylist({
+        name: name.trim() || auth.user_info.username || 'Xtream Source',
+        url: m3uUrl,
+        epgUrl,
+        serverUrl: base,
+        username,
+        password,
+        sourceKind: 'xtream',
+        status: 'ready',
+        channelCount: result.channelCount,
+        lastUpdated: Date.now(),
+      });
+
+      // SQLite bridge (non-fatal), mirrors the M3U flow
+      try {
+        if (typeof window !== 'undefined' && window.electronDB) {
+          const state = useProfilesStore.getState();
+          const profile = state.getActiveProfile();
+          const created = profile?.playlists?.find((p) => p.url === m3uUrl);
+          if (profile && created?.id) {
+            await state.addPlaylistToDB(profile.id, { id: created.id, name: created.name, url: created.url, type: 'm3u' });
+            await state.setActivePlaylistInDB(created.id);
+          }
+        }
+      } catch (dbErr) {
+        console.error('[SourceManager] SQLite ingestion failed (non-fatal):', dbErr);
+      }
+
+      setStatus({ type: 'success', msg: `Connected! ${result.channelCount} items imported (live, movies & series). ✓` });
+      setName(''); setServer(''); setUsername(''); setPassword('');
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        setStatus({ type: 'error', msg: 'Request cancelled.' });
+      } else {
+        console.error('[Xtream] add failed:', err);
+        setStatus({ type: 'error', msg: 'Could not reach the server. Check the URL and your connection.' });
+      }
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const field = 'w-full bg-[#0a1f22] border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow';
+
+  return (
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-white mb-2">Xtream Codes Login</h2>
+        <p className="text-gray-400">Sign in with the server, username and password from your provider. Live TV, movies and series import automatically.</p>
+      </div>
+
+      <div className="bg-[#123236] p-6 rounded-xl border border-gray-700 shadow-xl space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Display name (optional)</label>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="My Provider" className={field} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Server URL</label>
+          <input type="url" value={server} onChange={(e) => setServer(e.target.value)} placeholder="http://provider.example.com:8080" className={field} />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Username</label>
+            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" className={field} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">Password</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" className={field}
+              onKeyDown={(e) => e.key === 'Enter' && handleAdd()} />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between pt-2">
+          <div className="flex-1 mr-4">
+            <StatusMessage status={status} />
+          </div>
+          <button
+            onClick={handleAdd}
+            disabled={!canSubmit}
+            className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
+              !canSubmit
+                ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20'
+            }`}
+          >
+            {isProcessing ? 'Connecting...' : 'Sign In & Import'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

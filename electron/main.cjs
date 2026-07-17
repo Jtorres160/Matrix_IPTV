@@ -401,6 +401,25 @@ app.whenReady().then(async () => {
   }
   // ────────────────────────────────────────────────────────────────────────
 
+  // ── CORS unblock for IPTV providers ──────────────────────────────────────
+  // Xtream panels and most stream servers send no CORS headers, which blocks
+  // renderer fetch (player_api/EPG) and hls.js XHRs. Force a permissive
+  // Access-Control-Allow-Origin on every response. Credentials mode is never
+  // used by this app, so '*' is safe here.
+  try {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      const headers = details.responseHeaders || {};
+      for (const key of Object.keys(headers)) {
+        if (/^access-control-allow-origin$/i.test(key)) delete headers[key];
+      }
+      headers['Access-Control-Allow-Origin'] = ['*'];
+      callback({ responseHeaders: headers });
+    });
+  } catch (err) {
+    logger.error('Failed to install CORS unblock', err);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   createWindow();
 
   // ── Phase 7: Register database IPC handlers ─────────────────────────────
