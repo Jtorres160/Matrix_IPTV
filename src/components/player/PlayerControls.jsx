@@ -19,12 +19,20 @@ export default function PlayerControls() {
     showControlsTemporarily
   } = usePlayerStore();
   const setCurrentView = useAppStore(s => s.setCurrentView);
+  const setIsImmersivePlayer = useAppStore(s => s.setIsImmersivePlayer);
 
+  // Single source of truth for "leave the player". Channels enter fullscreen by
+  // flipping isImmersivePlayer (not currentView), so clearing only currentView
+  // left the player layer stuck on top — the button appeared dead until an app
+  // reload reset the flag. Mirror the App-level Escape/Back handler exactly.
   const handleBack = () => {
     if (isFullscreen) {
       toggleFullscreen();
     }
-    setCurrentView('live-tv');
+    setIsImmersivePlayer(false);
+    if (useAppStore.getState().currentView === 'player') {
+      setCurrentView('live-tv');
+    }
   };
 
   if (!showControls || !activeChannel) return null;
