@@ -384,12 +384,14 @@ export default function App() {
           <div className="pointer-events-auto">
             <Sidebar activeZone="sidebar" onSelect={(id) => {
               if (id === 'settings') setIsSettingsOpen(true);
+              else if (id === 'search') setIsPaletteOpen(true);
               else setCurrentView(id);
             }} />
           </div>
           <div className="pointer-events-auto">
             <BottomNavigationBar currentView={currentView} onSelect={(id) => {
               if (id === 'settings') setIsSettingsOpen(true);
+              else if (id === 'search') setIsPaletteOpen(true);
               else setCurrentView(id);
             }} />
           </div>

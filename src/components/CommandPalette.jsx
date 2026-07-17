@@ -73,6 +73,12 @@ export default function CommandPalette({ isOpen, onClose }) {
       e.preventDefault();
       e.stopPropagation();
       onClose();
+    } else if (e.key === 'Backspace' && query === '') {
+      // Remote Back with an empty box closes the palette instead of doing
+      // nothing (there's no character to delete).
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
     }
   };
 
