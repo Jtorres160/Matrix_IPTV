@@ -24,9 +24,32 @@ export const usePlayerStore = create((set, get) => ({
   // Channels Array (for previous/next navigation)
   playlist: [],
 
+  // Series autoplay: an ordered queue of episodes + the current index. Set when
+  // playback starts from a series, consumed by onEnded to roll to the next
+  // episode. Empty for live/movie playback.
+  seriesQueue: [],
+  seriesIndex: -1,
+
   // --- ACTIONS ---
 
   setPlaylist: (channels) => set({ playlist: channels }),
+
+  setSeriesQueue: (queue, index) => set({
+    seriesQueue: Array.isArray(queue) ? queue : [],
+    seriesIndex: typeof index === 'number' ? index : -1,
+  }),
+
+  // Advance to the next episode in the series queue. Returns true if it did.
+  playNextInSeries: () => {
+    const { seriesQueue, seriesIndex } = get();
+    if (seriesIndex >= 0 && seriesIndex < seriesQueue.length - 1) {
+      const next = seriesQueue[seriesIndex + 1];
+      set({ seriesIndex: seriesIndex + 1 });
+      get().setChannel(next);
+      return true;
+    }
+    return false;
+  },
 
   setChannel: (channel) => {
     // Clear any pending retry loops

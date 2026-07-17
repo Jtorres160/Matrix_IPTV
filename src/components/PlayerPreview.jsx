@@ -289,6 +289,12 @@ export default function PlayerPreview({ playerPreference }) {
             onPause={() => setPlaybackState('paused')}
             onBuffer={() => setPlaybackState('buffering')}
             onBufferEnd={() => setPlaybackState('playing')}
+            onEnded={() => {
+              // Series autoplay: roll to the next episode when one finishes.
+              // Live streams never fire onEnded, so this only affects VOD/series.
+              const advanced = usePlayerStore.getState().playNextInSeries();
+              if (!advanced) setPlaybackState('paused');
+            }}
             onError={(e) => {
               if (window.electronLog) window.electronLog.write('error', 'VIDEO_ERROR (ReactPlayer)', e);
               handleError();

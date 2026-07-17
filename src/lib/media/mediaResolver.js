@@ -78,19 +78,42 @@ export function playMediaItem(mediaItem) {
   appStore.setIsImmersivePlayer(true);
 
   switch (mediaItem.type) {
-    case 'movie':
     case 'series':
-      // For VOD/Series, we use the player overlay/view mechanism
-      // Ensure the correct view is active if we want to show the VODDetailOverlay,
-      // or just play the stream if VOD playback uses the same PlayerPreview
+      // For series the caller (playSeriesEpisode) has already set the autoplay
+      // queue; don't clear it here.
+      appStore.setCurrentView('player');
+      playerStore.setChannel(mediaItem);
+      break;
+    case 'movie':
+      // A one-off movie has no episode queue.
+      playerStore.setSeriesQueue([], -1);
       appStore.setCurrentView('player');
       playerStore.setChannel(mediaItem);
       break;
     case 'live':
     default:
+      playerStore.setSeriesQueue([], -1);
       appStore.setCurrentView('player');
       appStore.setSelectedChannel(mediaItem);
       playerStore.setChannel(mediaItem);
       break;
   }
+}
+
+/**
+ * Plays a specific episode of a grouped show, arming autoplay for the rest of
+ * the show (across seasons, in order) and recording it in watch history.
+ *
+ * @param {Object} show    A show object from groupSeries() (has ordered .episodes)
+ * @param {Object} episode The episode MediaItem to start on
+ */
+export function playSeriesEpisode(show, episode) {
+  if (!episode) return;
+  const playerStore = usePlayerStore.getState();
+  const queue = (show && Array.isArray(show.episodes) && show.episodes.length > 0)
+    ? show.episodes
+    : [episode];
+  const index = Math.max(0, queue.findIndex((e) => String(e.id) === String(episode.id)));
+  playerStore.setSeriesQueue(queue, index);
+  playMediaItem({ ...episode, type: 'series' });
 }

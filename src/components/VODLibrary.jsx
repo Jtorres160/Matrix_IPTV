@@ -2,8 +2,10 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useProfilesStore } from '../store/profileStore';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import VODDetailOverlay from './VODDetailOverlay';
+import SeriesDetailOverlay from './SeriesDetailOverlay';
 import { useAppStore } from '../store/appStore.js';
 import { playMediaItem } from '../lib/media/mediaResolver.js';
+import { groupSeries } from '../lib/media/seriesGrouping.js';
 
 const ROW_HEIGHT = 280;
 const POSTER_WIDTH = 160;
@@ -17,6 +19,7 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
   const [categories, setCategories] = useState([]);
   const [categoryData, setCategoryData] = useState({});
   const [selectedVOD, setSelectedVOD] = useState(null);
+  const [selectedSeries, setSelectedSeries] = useState(null);
   
   // Custom Virtualization state
   const containerRef = useRef(null);
@@ -163,12 +166,19 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
         <VODDetailOverlay
           item={selectedVOD}
           type={isMovies ? 'vod' : 'series'}
-          onClose={() => setSelectedVOD(null)} 
+          onClose={() => setSelectedVOD(null)}
           onPlay={() => {
             const item = selectedVOD;
             setSelectedVOD(null);
             playMediaItem(item);
           }}
+        />
+      )}
+
+      {selectedSeries && (
+        <SeriesDetailOverlay
+          show={selectedSeries}
+          onClose={() => setSelectedSeries(null)}
         />
       )}
       
@@ -213,27 +223,36 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
           )}
 
           {visibleCategories.map(({ name, actualIndex }) => {
-            const items = categoryData[name] || [];
-            
+            const rawItems = categoryData[name] || [];
+            // Series arrive as flat episodes; collapse them into one card per
+            // show. Movies render one card per title as-is.
+            const cards = isMovies ? rawItems : groupSeries(rawItems);
+
             return (
               <div key={name} style={{ gridRow: actualIndex + 1, gridColumn: 1, padding: '0 0 0 40px' }}>
                 <h2 style={{ color: '#e0e0e0', fontSize: '1.4rem', margin: '0 0 15px 0', fontWeight: 600 }}>
                   {name}
                 </h2>
-                
+
                 <div style={{ display: 'flex', gap: '20px', overflowX: 'visible' }}>
-                  {items.map((item, colIndex) => {
-                    // DB rows carry stream_icon/cover; adapter MediaItems carry poster/logo
-                    const posterUrl = (isMovies ? item.stream_icon : item.cover) || item.poster || item.logo || null;
-                    const itemName = item.name || item.title || 'Untitled';
+                  {cards.map((card, colIndex) => {
+                    // DB rows carry stream_icon/cover; adapter MediaItems carry
+                    // poster/logo; grouped shows carry .poster.
+                    const posterUrl = isMovies
+                      ? (card.stream_icon || card.cover || card.poster || card.logo || null)
+                      : (card.poster || null);
+                    const itemName = isMovies ? (card.name || card.title || 'Untitled') : card.show;
+                    const subtitle = isMovies ? null
+                      : `${card.seasonNumbers.length} season${card.seasonNumbers.length === 1 ? '' : 's'}`;
+                    const onOpen = isMovies ? () => setSelectedVOD(card) : () => setSelectedSeries(card);
                     return (
                       <div
-                        key={item.stream_id || item.series_id || item.id || colIndex}
+                        key={card.key || card.stream_id || card.series_id || card.id || colIndex}
                         className="vod-card"
                         data-nav-zone="vod-library"
                         data-nav-row={actualIndex}
                         data-nav-col={colIndex}
-                        onClick={() => setSelectedVOD(item)}
+                        onClick={onOpen}
                         style={{
                           width: `${POSTER_WIDTH}px`,
                           height: `${POSTER_HEIGHT}px`,
@@ -257,14 +276,15 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
                             onError={(e) => { e.target.style.display = 'none'; }}
                           />
                         ) : (
-                          <div style={{ padding: '15px', color: '#888', display: 'flex', alignItems: 'center', height: '100%', textAlign: 'center' }}>
-                            {itemName}
+                          <div style={{ padding: '15px', color: '#ddd', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: 600 }}>{itemName}</span>
+                            {subtitle && <span style={{ fontSize: '0.8rem', color: '#7fd8cf' }}>{subtitle}</span>}
                           </div>
                         )}
                       </div>
                     );
                   })}
-                  {items.length === 0 && (
+                  {cards.length === 0 && (
                     <div style={{ color: '#666' }}>Loading...</div>
                   )}
                 </div>
