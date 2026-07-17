@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/appStore.js';
-import { useActiveProfile, useProfilesStore } from '../store/profileStore';
+import { useActiveProfile, useProfilesStore, useActiveSettings } from '../store/profileStore';
 import { LucideSearch, LucideHeart, LucidePlayCircle, LucideTv, LucideImageOff, LucideListVideo } from 'lucide-react';
 import { usePlayerStore } from '../player/playerStore.js';
 import FavoritesRail from './favorites/FavoritesRail.jsx';
@@ -15,6 +15,7 @@ import { useChannelInput } from '../hooks/useChannelInput.js';
 import { useWatchSession } from '../hooks/useWatchSession.js';
 import { useTVBackNavigation } from '../hooks/useTVBackNavigation.js';
 import { resolveMediaItem, playMediaItem } from '../lib/media/mediaResolver.js';
+import { getNowNext, formatTime, programProgress } from '../lib/epg/epgTime.js';
 
 export default function LiveTVView({ isActive = true }) {
   useEffect(() => {
@@ -37,6 +38,7 @@ export default function LiveTVView({ isActive = true }) {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   
   const activeProfile = useActiveProfile();
+  const activeSettings = useActiveSettings();
   const toggleFavorite = useProfilesStore((s) => s.toggleFavorite);
   const addRecentlyWatched = useProfilesStore((s) => s.addRecentlyWatched);
   
@@ -212,15 +214,7 @@ export default function LiveTVView({ isActive = true }) {
 
         {/* Bottom Hero Layer (Context for currently playing video) */}
         {activeChannel ? (
-           <div className="pointer-events-auto mb-8">
-              <span className="px-3 py-1 bg-red-600 text-white text-xs font-bold tracking-widest uppercase rounded shadow-sm mb-3 inline-block">Live</span>
-              <h1 className="text-6xl font-black text-white drop-shadow-2xl max-w-4xl tracking-tight mb-2">
-                {activeChannel.name}
-              </h1>
-              <p className="text-xl text-gray-300 drop-shadow-md font-medium">
-                {activeChannel.groups?.[0]}
-              </p>
-           </div>
+           <HeroNowPlaying channel={activeChannel} epgData={epgData} />
         ) : (
           <div className="pointer-events-auto mb-8">
             <h1 className="text-5xl font-black text-white drop-shadow-2xl tracking-tight mb-2">Live TV</h1>
@@ -299,10 +293,10 @@ export default function LiveTVView({ isActive = true }) {
         <div className="mt-8 flex-1 flex flex-col px-8">
           <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">All Channels</h2>
           
-          <CategoryRibbon 
-            categories={categories} 
-            activeCategory={activeCategory} 
-            setActiveCategory={setActiveCategory} 
+          <CategoryRibbon
+            categories={categories.filter((c) => !(activeSettings?.hiddenCategories || []).includes(c))}
+            activeCategory={activeCategory}
+            setActiveCategory={setActiveCategory}
           />
           
           <div className="mt-6 flex-1 min-h-[500px]">
@@ -344,6 +338,46 @@ export default function LiveTVView({ isActive = true }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Components
 // ─────────────────────────────────────────────────────────────────────────────
+
+function HeroNowPlaying({ channel, epgData }) {
+  const programs = epgData.get(channel.tvgId) || [];
+  const { now, next } = getNowNext(programs);
+  const progress = programProgress(now);
+
+  return (
+    <div className="pointer-events-auto mb-8 max-w-4xl">
+      <span className="px-3 py-1 bg-red-600 text-white text-xs font-bold tracking-widest uppercase rounded shadow-sm mb-3 inline-block">Live</span>
+      <h1 className="text-6xl font-black text-white drop-shadow-2xl tracking-tight mb-2">
+        {channel.name}
+      </h1>
+      {now ? (
+        <div className="mt-2">
+          <p className="text-2xl text-white drop-shadow-md font-semibold">
+            {now.title}
+            <span className="text-gray-400 text-lg font-normal ml-3">
+              {formatTime(now.start)} – {formatTime(now.stop)}
+            </span>
+          </p>
+          {progress != null && (
+            <div className="w-96 max-w-full h-1 bg-white/20 rounded-full mt-3 overflow-hidden">
+              <div className="h-full bg-red-500 rounded-full" style={{ width: `${Math.round(progress * 100)}%` }} />
+            </div>
+          )}
+          {next && (
+            <p className="text-base text-gray-300 drop-shadow-md mt-3">
+              <span className="text-gray-500 uppercase text-xs font-bold tracking-wider mr-2">Next</span>
+              {next.title} · {formatTime(next.start)}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="text-xl text-gray-300 drop-shadow-md font-medium">
+          {channel.groups?.[0]}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function CategoryRibbon({ categories, activeCategory, setActiveCategory }) {
   const containerRef = useRef(null);
@@ -424,7 +458,12 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
     const isPlaying = activeUrl === channel.url;
     const isFav = favorites.includes(channel.id);
     const epg = getEpgForChannel(channel.tvgId);
-    const currentProgram = epg[0]?.title || "Unknown Program";
+    const { now: nowProgram } = getNowNext(epg);
+    const progress = programProgress(nowProgram);
+    // Fall back to the channel's group — never a dead "Unknown Program"
+    const currentProgram = nowProgram
+      ? nowProgram.title
+      : (channel.groups?.[0] || '');
 
     visibleItems.push(
       <div 
@@ -464,8 +503,14 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
               {isPlaying && <span className="flex shrink-0 w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>}
             </div>
             <p className="text-sm text-gray-400 truncate mt-0.5">
+              {nowProgram && <span className="text-blue-400 font-medium mr-2">{formatTime(nowProgram.start)}</span>}
               {currentProgram}
             </p>
+            {progress != null && (
+              <div className="w-40 h-0.5 bg-white/10 rounded-full mt-1.5 overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.round(progress * 100)}%` }} />
+              </div>
+            )}
           </div>
           
           {/* Actions */}
