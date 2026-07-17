@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useActiveSettings, useProfilesStore } from '../store/profileStore';
 import ProfileSwitcher from '../ProfileSwitcher.jsx';
 import { useAppStore } from '../store/appStore.js';
+import { useEntitlementsStore } from '../store/entitlementsStore.js';
 import {
   LucideSettings, LucidePalette, LucideMonitorPlay, LucideDatabase,
   LucideUsers, LucideTerminal, LucideInfo, LucideX, LucideChevronRight,
-  LucideCalendarDays, LucideKeyboard
+  LucideCalendarDays, LucideKeyboard, LucideKey
 } from 'lucide-react';
 
 export default function SettingsDrawer({ isOpen, onClose }) {
@@ -48,6 +49,7 @@ export default function SettingsDrawer({ isOpen, onClose }) {
             <SectionButton id="guide" icon={<LucideCalendarDays size={16} />} label="Guide & Data" active={activeSection === 'guide'} onClick={setActiveSection} />
             <SectionButton id="sources" icon={<LucideDatabase size={16} />} label="Sources" active={activeSection === 'sources'} onClick={setActiveSection} />
             <SectionButton id="profiles" icon={<LucideUsers size={16} />} label="Profiles" active={activeSection === 'profiles'} onClick={setActiveSection} />
+            <SectionButton id="license" icon={<LucideKey size={16} />} label="License" active={activeSection === 'license'} onClick={setActiveSection} />
             <SectionButton id="shortcuts" icon={<LucideKeyboard size={16} />} label="Shortcuts" active={activeSection === 'shortcuts'} onClick={setActiveSection} />
             <SectionButton id="advanced" icon={<LucideTerminal size={16} />} label="Advanced" active={activeSection === 'advanced'} onClick={setActiveSection} />
             <div className="my-4 border-t border-gray-700/50"></div>
@@ -61,6 +63,7 @@ export default function SettingsDrawer({ isOpen, onClose }) {
             {activeSection === 'guide' && <GuideDataSettings />}
             {activeSection === 'sources' && <SourcesShortcut onClose={onClose} />}
             {activeSection === 'profiles' && <ProfilesSettings />}
+            {activeSection === 'license' && <LicenseSettings />}
             {activeSection === 'shortcuts' && <ShortcutsSettings />}
             {activeSection === 'advanced' && <AdvancedSettings />}
             {activeSection === 'about' && <AboutSettings />}
@@ -376,6 +379,104 @@ function ProfilesSettings() {
       <div className="p-4 bg-[#123236] rounded-xl border border-gray-700">
         <ProfileSwitcher />
       </div>
+    </div>
+  );
+}
+
+function LicenseSettings() {
+  const { tier, email, issued, hydrated, refresh, activate, deactivate } = useEntitlementsStore();
+  const [key, setKey] = useState('');
+  const [status, setStatus] = useState({ type: '', msg: '' });
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const isPro = tier === 'pro';
+
+  const handleActivate = async () => {
+    if (!key.trim() || busy) return;
+    setBusy(true);
+    setStatus({ type: '', msg: '' });
+    try {
+      const res = await activate(key.trim());
+      setStatus(res?.success
+        ? { type: 'success', msg: 'License activated.' }
+        : { type: 'error', msg: res?.error || 'That key was not accepted.' });
+      if (res?.success) setKey('');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDeactivate = async () => {
+    setBusy(true);
+    try {
+      await deactivate();
+      setStatus({ type: 'success', msg: 'License deactivated.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div>
+        <h3 className="text-lg font-semibold text-white mb-1">License</h3>
+        <p className="text-sm text-gray-400 mb-6">Activate Matrix Pro to unlock DVR recording, Recordings, and unlimited sources.</p>
+      </div>
+
+      <div className="p-4 bg-[#123236] rounded-xl border border-gray-700">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-medium text-white">{isPro ? 'Matrix Pro (active)' : 'Free tier'}</div>
+            {isPro && email && <div className="text-sm text-gray-400 mt-1">Licensed to {email}{issued ? ` · activated ${new Date(issued).toLocaleDateString()}` : ''}</div>}
+          </div>
+          <span className={`text-xs font-bold uppercase tracking-wide px-2 py-1 rounded ${isPro ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-600/40 text-gray-300'}`}>
+            {isPro ? 'Pro' : 'Free'}
+          </span>
+        </div>
+      </div>
+
+      {!isPro && (
+        <div className="p-4 bg-[#123236] rounded-xl border border-gray-700 space-y-3">
+          <div className="font-medium text-white">Activate a license</div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleActivate()}
+              placeholder="Paste your license key"
+              className="flex-1 bg-[#0a1f22] border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleActivate}
+              disabled={busy}
+              className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold focus:outline-none"
+            >
+              Activate
+            </button>
+          </div>
+        </div>
+      )}
+
+      {isPro && (
+        <button
+          onClick={handleDeactivate}
+          disabled={busy}
+          className="px-4 py-2 rounded-lg bg-red-600/20 text-red-300 border border-red-500/30 hover:bg-red-600/30 disabled:opacity-50 text-sm font-semibold focus:outline-none"
+        >
+          Deactivate license
+        </button>
+      )}
+
+      {status.msg && (
+        <p className={`text-xs ${status.type === 'error' ? 'text-red-400' : 'text-emerald-400'}`}>{status.msg}</p>
+      )}
+
+      {!window.desktop?.isElectron && (
+        <p className="text-xs text-yellow-500 px-1">License activation is available in the desktop app only.</p>
+      )}
     </div>
   );
 }
