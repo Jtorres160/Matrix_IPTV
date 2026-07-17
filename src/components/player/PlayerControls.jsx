@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { LucideMaximize, LucideMinimize, LucideVolume2, LucideVolumeX, LucidePause, LucidePlay, LucideArrowLeft, LucideRatio, LucideSubtitles, LucideCircle, LucideSquare } from 'lucide-react';
+import { LucideMaximize, LucideMinimize, LucideVolume2, LucideVolumeX, LucidePause, LucidePlay, LucideArrowLeft, LucideRatio, LucideSubtitles, LucideCircle, LucideSquare, LucideLock } from 'lucide-react';
 import { usePlayerStore } from '../../player/playerStore.js';
 import { useAppStore } from '../../store/appStore.js';
 import { readTracks, setAudioTrack, setSubtitleTrack } from '../../lib/player/tracks.js';
+import { useEntitlementsStore } from '../../store/entitlementsStore.js';
+import UpsellModal from '../UpsellModal.jsx';
 
 const FIT_LABEL = { contain: 'Fit', cover: 'Fill', fill: 'Stretch' };
 
@@ -45,6 +47,8 @@ export default function PlayerControls() {
   const [tracksOpen, setTracksOpen] = useState(false);
   const [tracks, setTracks] = useState({ audio: [], subtitles: [], hasHls: false });
   const [isRecording, setIsRecording] = useState(false);
+  const isPro = useEntitlementsStore((s) => s.isPro());
+  const [upsellOpen, setUpsellOpen] = useState(false);
 
   const openTracks = () => {
     setTracks(readTracks(mediaHandles));
@@ -68,6 +72,7 @@ export default function PlayerControls() {
 
   const toggleRecord = async () => {
     if (!canRecord || !activeChannel) return;
+    if (!isPro) { setUpsellOpen(true); return; }
     const id = String(activeChannel.id);
     showControlsTemporarily();
     try {
@@ -188,19 +193,26 @@ export default function PlayerControls() {
             {canRecord && (
               <button
                 onClick={toggleRecord}
-                title={isRecording ? 'Stop recording' : 'Record'}
+                title={isPro ? (isRecording ? 'Stop recording' : 'Record') : 'Matrix Pro required'}
                 className={`flex items-center gap-2 transition-colors focus:outline-none ${
                   isRecording ? 'text-red-500' : 'text-white hover:text-red-400'
                 }`}
               >
-                {isRecording
-                  ? <LucideSquare size={20} className="fill-red-500" />
-                  : <LucideCircle size={22} className="fill-red-500 text-red-500" />}
+                {!isPro
+                  ? <LucideLock size={18} className="text-amber-400" />
+                  : isRecording
+                    ? <LucideSquare size={20} className="fill-red-500" />
+                    : <LucideCircle size={22} className="fill-red-500 text-red-500" />}
                 <span className="text-xs font-semibold uppercase tracking-wide">
-                  {isRecording ? 'Recording' : 'Rec'}
+                  {isPro ? (isRecording ? 'Recording' : 'Rec') : 'Rec'}
                 </span>
               </button>
             )}
+            <UpsellModal
+              open={upsellOpen}
+              onClose={() => setUpsellOpen(false)}
+              reason="DVR recording is a Matrix Pro feature."
+            />
           </div>
 
           {/* Right Controls */}
