@@ -45,6 +45,18 @@ contextBridge.exposeInMainWorld('electronRecording', {
   getPlaybackBaseUrl: () => ipcRenderer.invoke('recording:getPlaybackBaseUrl')
 });
 
+// Expose Scheduled Recordings API safely
+contextBridge.exposeInMainWorld('electronSchedule', {
+  add: (job) => ipcRenderer.invoke('schedule:add', job),
+  list: () => ipcRenderer.invoke('schedule:list'),
+  cancel: (id) => ipcRenderer.invoke('schedule:cancel', id),
+  onUpdate: (callback) => {
+    const sub = (event, data) => callback(data);
+    ipcRenderer.on('schedule:update', sub);
+    return () => ipcRenderer.removeListener('schedule:update', sub);
+  }
+});
+
 // Expose SQLite DB API safely
 contextBridge.exposeInMainWorld('electronDB', {
   getPlaylists:      (profileId) => ipcRenderer.invoke('db:getPlaylists', profileId),

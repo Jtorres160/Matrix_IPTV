@@ -15,7 +15,9 @@ const { registerIPCHandlers, setMainWindow } = require('./ipcHandlers.cjs');
 
 // ── Recorded-Files Library ──────────────────────────────────────────────────
 const { listRecordings, resolveRecordingPath, createRecordingServer } = require('./recordingLibrary.cjs');
+const { createScheduler } = require('./scheduler.cjs');
 let recordingServer = null;
+let scheduler = null;
 // Single source of truth for where DVR captures live and are served from.
 function getRecordingsDir() {
   return path.join(app.getPath('downloads'), 'Matrix Recordings');
@@ -295,6 +297,18 @@ class RecordingManager {
 
 const recordingManager = new RecordingManager();
 
+function ensureScheduler() {
+  if (scheduler) return scheduler;
+  scheduler = createScheduler({
+    store,
+    recordingManager,
+    onUpdate: (jobs) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('schedule:update', jobs);
+    },
+  });
+  return scheduler;
+}
+
 ipcMain.handle('recording:start', async (event, streamId, url, filename) => {
   return await recordingManager.startRecording(streamId, url, filename);
 });
@@ -326,6 +340,11 @@ ipcMain.handle('recording:delete', async (event, id) => {
 ipcMain.handle('recording:getPlaybackBaseUrl', async () => {
   return recordingServer ? recordingServer.baseUrl : null;
 });
+
+// ── Scheduled Recordings IPC ────────────────────────────────────────────────
+ipcMain.handle('schedule:add', async (event, job) => ensureScheduler().add(job));
+ipcMain.handle('schedule:list', async () => ensureScheduler().list());
+ipcMain.handle('schedule:cancel', async (event, id) => ensureScheduler().cancel(id));
 // ────────────────────────────────────────────────────────────────────────────
 // --- *** END OF CHANGE *** ---
 
@@ -466,6 +485,15 @@ app.whenReady().then(async () => {
     logger.info(`[Recordings] server on ${recordingServer.baseUrl}`);
   } catch (e) {
     logger.error('[Recordings] server failed to start', e);
+  }
+  // ────────────────────────────────────────────────────────────────────────
+
+  // ── Scheduled Recordings: reconcile + arm persisted jobs ────────────────
+  try {
+    if (!store) await initStore();
+    ensureScheduler().init();
+  } catch (e) {
+    logger.error('[Scheduler] init failed', e);
   }
   // ────────────────────────────────────────────────────────────────────────
 
