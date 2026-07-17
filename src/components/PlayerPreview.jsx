@@ -4,6 +4,7 @@ import { usePlayerStore } from '../player/playerStore.js';
 import PlayerControls from './player/PlayerControls.jsx';
 import PlayerStatus from './player/PlayerStatus.jsx';
 import PlayerOverlay from './player/PlayerOverlay.jsx';
+import MpegtsPlayer from './player/MpegtsPlayer.jsx';
 import { useAppStore } from '../store/appStore.js';
 
 export default function PlayerPreview({ playerPreference }) {
@@ -275,9 +276,11 @@ export default function PlayerPreview({ playerPreference }) {
       <PlayerStatus />
       <PlayerControls />
 
-      {/* Video Engine */}
+      {/* Video Engine — mpegts.js for recordings (raw TS), ReactPlayer otherwise */}
       <div className="w-full h-full pointer-events-none">
-        {activeUrl ? (
+        {!activeUrl ? null : activeChannel?.isRecording ? (
+          <MpegtsPlayer />
+        ) : (
           <ReactPlayer
             ref={playerRef}
             url={activeUrl}
@@ -327,7 +330,7 @@ export default function PlayerPreview({ playerPreference }) {
               }
             }}
           />
-        ) : null}
+        )}
       </div>
     </div>
   );
