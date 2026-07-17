@@ -2,7 +2,7 @@ import React, { useRef } from 'react';
 import LiveTVView from './LiveTVView.jsx';
 import VODLibrary from './VODLibrary.jsx';
 import ChannelBrowserView from './ChannelBrowserView.jsx';
-import RecordingDashboard from './RecordingDashboard.jsx';
+import RecordingsView from './RecordingsView.jsx';
 import { useAppStore } from '../store/appStore';
 
 import SourceManagerView from './SourceManagerView.jsx';
@@ -35,7 +35,7 @@ const ROUTES = {
   ),
   'recordings': () => (
     <div className="w-full h-full bg-[#0a1118] pl-0 md:pl-[260px] pb-16 md:pb-0 transition-all duration-300 overflow-y-auto">
-      <RecordingDashboard />
+      <RecordingsView />
     </div>
   )
 };
