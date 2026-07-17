@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { LucideMaximize, LucideMinimize, LucideVolume2, LucideVolumeX, LucidePause, LucidePlay, LucideArrowLeft, LucideRatio, LucideSubtitles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LucideMaximize, LucideMinimize, LucideVolume2, LucideVolumeX, LucidePause, LucidePlay, LucideArrowLeft, LucideRatio, LucideSubtitles, LucideCircle, LucideSquare } from 'lucide-react';
 import { usePlayerStore } from '../../player/playerStore.js';
 import { useAppStore } from '../../store/appStore.js';
 import { readTracks, setAudioTrack, setSubtitleTrack } from '../../lib/player/tracks.js';
@@ -9,6 +9,7 @@ const FIT_LABEL = { contain: 'Fit', cover: 'Fill', fill: 'Stretch' };
 export default function PlayerControls() {
   const {
     activeChannel,
+    activeUrl,
     playbackState,
     isFullscreen,
     volume,
@@ -29,11 +30,44 @@ export default function PlayerControls() {
 
   const [tracksOpen, setTracksOpen] = useState(false);
   const [tracks, setTracks] = useState({ audio: [], subtitles: [], hasHls: false });
+  const [isRecording, setIsRecording] = useState(false);
 
   const openTracks = () => {
     setTracks(readTracks(mediaHandles));
     setTracksOpen((o) => !o);
     showControlsTemporarily();
+  };
+
+  const canRecord = typeof window !== 'undefined' && !!window.electronRecording;
+
+  // Reflect the backend recording state for the current channel.
+  useEffect(() => {
+    if (!canRecord || !activeChannel) { setIsRecording(false); return; }
+    let cancelled = false;
+    window.electronRecording.getStatus?.().then((list) => {
+      if (cancelled) return;
+      const id = String(activeChannel.id);
+      setIsRecording(Array.isArray(list) && list.some((r) => String(r.streamId) === id));
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [activeChannel, canRecord]);
+
+  const toggleRecord = async () => {
+    if (!canRecord || !activeChannel) return;
+    const id = String(activeChannel.id);
+    showControlsTemporarily();
+    try {
+      if (isRecording) {
+        await window.electronRecording.stop(id);
+        setIsRecording(false);
+      } else {
+        setIsRecording(true); // optimistic
+        const res = await window.electronRecording.start(id, activeUrl, activeChannel.name);
+        if (res && res.success === false) setIsRecording(false);
+      }
+    } catch {
+      setIsRecording(false);
+    }
   };
 
   // Single source of truth for "leave the player". Channels enter fullscreen by
@@ -107,16 +141,33 @@ export default function PlayerControls() {
               >
                 {muted || volume === 0 ? <LucideVolumeX size={24} /> : <LucideVolume2 size={24} />}
               </button>
-              <input 
-                type="range" 
-                min="0" 
-                max="1" 
-                step="0.05" 
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
                 value={muted ? 0 : volume}
                 onChange={(e) => setVolume(parseFloat(e.target.value))}
                 className="w-24 h-1.5 bg-white/30 rounded-lg appearance-none cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
               />
             </div>
+
+            {canRecord && (
+              <button
+                onClick={toggleRecord}
+                title={isRecording ? 'Stop recording' : 'Record'}
+                className={`flex items-center gap-2 transition-colors focus:outline-none ${
+                  isRecording ? 'text-red-500' : 'text-white hover:text-red-400'
+                }`}
+              >
+                {isRecording
+                  ? <LucideSquare size={20} className="fill-red-500" />
+                  : <LucideCircle size={22} className="fill-red-500 text-red-500" />}
+                <span className="text-xs font-semibold uppercase tracking-wide">
+                  {isRecording ? 'Recording' : 'Rec'}
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Right Controls */}

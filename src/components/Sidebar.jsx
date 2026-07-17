@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tv, LayoutList, Film, ListVideo, ListMusic, Settings, Search } from 'lucide-react';
+import { Tv, LayoutList, Film, ListVideo, ListMusic, Settings, Search, Disc } from 'lucide-react';
 
 // NOTE: no 'favorites' entry — there is no route for it (favorites live as a
 // rail inside Live TV and a category in Channels). A menu item without a
@@ -11,6 +11,7 @@ const MENU_ITEMS = [
   { id: 'search', label: 'Search', icon: Search },
   { id: 'movies', label: 'Movies', icon: Film },
   { id: 'series', label: 'Series', icon: ListVideo },
+  { id: 'recordings', label: 'Recordings', icon: Disc },
   { id: 'playlists', label: 'Playlists', icon: ListMusic },
   { id: 'settings', label: 'Settings', icon: Settings }
 ];
