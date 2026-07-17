@@ -25,6 +25,19 @@ export default function EPGOverlay({ isOpen, onClose, channels, epgData, onPlayC
     }
   }, [isOpen]);
 
+  const handleSchedule = (program, channel) => {
+    if (!window.electronSchedule || !channel?.url) return;
+    window.electronSchedule.add({
+      id: `epg-${channel.id}-${program.start}`,
+      channelId: String(channel.id),
+      channelName: channel.name,
+      url: channel.url,
+      title: program.title || channel.name,
+      startMs: program.start,
+      stopMs: program.stop,
+    });
+  };
+
   if (!isOpen) return null;
 
   // Render a subset of channels around the active one, or just the top 50 to avoid DOM bloat in the overlay.
@@ -61,14 +74,15 @@ export default function EPGOverlay({ isOpen, onClose, channels, epgData, onPlayC
           {displayChannels.map(channel => {
             const programs = epgData.get(channel.tvgId) || [];
             return (
-              <EPGChannelRow 
-                key={channel.id} 
-                channel={channel} 
-                programs={programs} 
+              <EPGChannelRow
+                key={channel.id}
+                channel={channel}
+                programs={programs}
                 onPlay={(ch) => {
                   onPlayChannel(ch);
                   onClose();
                 }}
+                onSchedule={handleSchedule}
               />
             );
           })}
