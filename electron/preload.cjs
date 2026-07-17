@@ -57,6 +57,18 @@ contextBridge.exposeInMainWorld('electronSchedule', {
   }
 });
 
+// Expose Matrix Pro licensing safely
+contextBridge.exposeInMainWorld('electronLicense', {
+  activate: (key) => ipcRenderer.invoke('license:activate', key),
+  status: () => ipcRenderer.invoke('license:status'),
+  deactivate: () => ipcRenderer.invoke('license:deactivate')
+});
+
+// Expose a minimal external-link opener (for the "Get Pro" payment link)
+contextBridge.exposeInMainWorld('electronApp', {
+  openExternal: (url) => ipcRenderer.invoke('app:openExternal', url)
+});
+
 // Expose SQLite DB API safely
 contextBridge.exposeInMainWorld('electronDB', {
   getPlaylists:      (profileId) => ipcRenderer.invoke('db:getPlaylists', profileId),

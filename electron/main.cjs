@@ -1,6 +1,6 @@
 // electron/main.cjs
 
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -16,6 +16,7 @@ const { registerIPCHandlers, setMainWindow } = require('./ipcHandlers.cjs');
 // ── Recorded-Files Library ──────────────────────────────────────────────────
 const { listRecordings, resolveRecordingPath, createRecordingServer } = require('./recordingLibrary.cjs');
 const { createScheduler } = require('./scheduler.cjs');
+const { verifyLicense, STORE_KEY: LICENSE_STORE_KEY } = require('./licensing.cjs');
 let recordingServer = null;
 let scheduler = null;
 // Single source of truth for where DVR captures live and are served from.
@@ -346,6 +347,41 @@ ipcMain.handle('schedule:add', async (event, job) => ensureScheduler().add(job))
 ipcMain.handle('schedule:list', async () => ensureScheduler().list());
 ipcMain.handle('schedule:cancel', async (event, id) => ensureScheduler().cancel(id));
 // ────────────────────────────────────────────────────────────────────────────
+
+// ── Matrix Pro Licensing IPC ────────────────────────────────────────────────
+ipcMain.handle('license:activate', async (event, key) => {
+  if (!store) await initStore();
+  const entitlement = verifyLicense(key);
+  if (!entitlement) return { success: false, error: 'Invalid or corrupted license key' };
+  store.set(LICENSE_STORE_KEY, { key, ...entitlement });
+  return { success: true, entitlement };
+});
+
+ipcMain.handle('license:status', async () => {
+  if (!store) await initStore();
+  const saved = store.get(LICENSE_STORE_KEY);
+  if (!saved || !saved.key) return { tier: 'free' };
+  // Re-verify on every read so a hand-edited store value can't grant Pro.
+  const entitlement = verifyLicense(saved.key);
+  if (!entitlement) {
+    store.delete(LICENSE_STORE_KEY);
+    return { tier: 'free' };
+  }
+  return entitlement;
+});
+
+ipcMain.handle('license:deactivate', async () => {
+  if (!store) await initStore();
+  store.delete(LICENSE_STORE_KEY);
+  return { success: true };
+});
+// ────────────────────────────────────────────────────────────────────────────
+
+ipcMain.handle('app:openExternal', async (event, url) => {
+  if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) return { success: false };
+  await shell.openExternal(url);
+  return { success: true };
+});
 // --- *** END OF CHANGE *** ---
 
 // VLC IPC Handlers
