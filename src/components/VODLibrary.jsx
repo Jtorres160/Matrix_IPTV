@@ -3,6 +3,7 @@ import { useProfilesStore } from '../store/profileStore';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import VODDetailOverlay from './VODDetailOverlay';
 import SeriesDetailOverlay from './SeriesDetailOverlay';
+import ResumeRail from './tv/ResumeRail.jsx';
 import { useAppStore } from '../store/appStore.js';
 import { playMediaItem } from '../lib/media/mediaResolver.js';
 import { groupSeries } from '../lib/media/seriesGrouping.js';
@@ -182,6 +183,8 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
         />
       )}
       
+      <ResumeRail types={isMovies ? ['movie'] : ['series']} onPlay={playMediaItem} />
+
       <div className="vod-container" ref={containerRef} onScroll={handleScroll} style={styles.container}>
         <style>{`
           .vod-container::-webkit-scrollbar { display: none; }
