@@ -13,6 +13,13 @@ const { initDatabase, closeDatabase, cleanupExpiredEPG } = require('./db.cjs');
 const { registerIPCHandlers, setMainWindow } = require('./ipcHandlers.cjs');
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Recorded-Files Library ──────────────────────────────────────────────────
+// Single source of truth for where DVR captures live and are served from.
+function getRecordingsDir() {
+  return path.join(app.getPath('downloads'), 'Matrix Recordings');
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Global Error Catching
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught Exception', error);
@@ -183,8 +190,9 @@ class RecordingManager {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const finalFilename = `${safeFilename}_${timestamp}.ts`;
       
-      const downloadsPath = app.getPath('downloads');
-      const filePath = path.join(downloadsPath, finalFilename);
+      const recordingsDir = getRecordingsDir();
+      try { fs.mkdirSync(recordingsDir, { recursive: true }); } catch (e) { /* best effort */ }
+      const filePath = path.join(recordingsDir, finalFilename);
 
       const isHttps = url.startsWith('https');
       const client = isHttps ? https : http;
