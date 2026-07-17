@@ -9,6 +9,7 @@ import { runIdentityBridgeDiagnostics } from "./lib/tv/identityBridge.js";
 import { DB_CHANNEL_PARITY, USE_DB_CHANNELS } from "./config/featureFlags.js";
 import { toMediaItem } from "./lib/media/mediaAdapter.js";
 
+import { usePlayerStore } from "./player/playerStore.js";
 import BottomNavigationBar from "./components/BottomNavigationBar.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import useMediaKeys from "./hooks/useMediaKeys.js";
@@ -17,6 +18,7 @@ import ViewRouter from "./components/ViewRouter.jsx";
 import PlayerPreview from "./components/PlayerPreview.jsx";
 import SettingsDrawer from "./components/SettingsDrawer.jsx";
 import AutoplayResume from "./components/AutoplayResume.jsx";
+import CommandPalette from "./components/CommandPalette.jsx";
 
 export default function App() {
   useMediaKeys();
@@ -34,6 +36,19 @@ export default function App() {
 
   // Modals and UI overlays
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+
+  // Global search: Ctrl/Cmd+K
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   // App Store bindings — individual selectors so App only re-renders when the
   // values it actually uses change (a whole-store subscription re-rendered the
@@ -55,6 +70,8 @@ export default function App() {
   const resetVolatileState = useAppStore((s) => s.resetVolatileState);
   const isImmersivePlayer = useAppStore((s) => s.isImmersivePlayer);
   const setIsImmersivePlayer = useAppStore((s) => s.setIsImmersivePlayer);
+  const playerDock = useAppStore((s) => s.playerDock);
+  const hasActiveChannel = usePlayerStore((s) => !!s.activeChannel);
 
   useEffect(() => {
     const lastView = localStorage.getItem('matrix_last_view');
@@ -115,17 +132,16 @@ export default function App() {
     }
   }, [customUserAgent]);
 
-  const activePlaylistUrl = activeProfile?.playlists?.[0]?.url;
+  // The playlist marked active wins; fall back to the first one (legacy)
+  const activePlaylist = activeProfile?.playlists?.find((p) => p.active) || activeProfile?.playlists?.[0];
+  const activePlaylistUrl = activePlaylist?.url;
 
   // Handle Profile Switch or Main Playlist Change
   useEffect(() => {
     resetVolatileState();
 
-    if (activeProfile && activeProfile.playlists && activeProfile.playlists[0]) {
-      const playlist = activeProfile.playlists[0];
-      if (playlist.type === 'm3u') {
-        loadM3UPlaylist(playlist);
-      }
+    if (activePlaylist && activePlaylist.type === 'm3u') {
+      loadM3UPlaylist(activePlaylist);
     }
   }, [activeProfile?.id, activePlaylistUrl]);
 
@@ -173,7 +189,8 @@ export default function App() {
     // Check Cache
     const cached = await getPlaylistFromCache(playlist.url);
     if (cached) {
-      setEpgUrl(cached.epgUrl);
+      // Playlist-level EPG (e.g. Xtream xmltv.php) beats the M3U header URL
+      setEpgUrl(playlist.epgUrl || cached.epgUrl);
       updateMediaState(cached.channels, playlist.id);
       setCategories(cached.categories);
       setActiveCategory(null);
@@ -205,11 +222,11 @@ export default function App() {
     
     if (result.success) {
        await savePlaylistToCache(playlist.url, result);
-       
+
        // If silent and the view is Live TV, we can optionally update it.
        // However, updating channels while the user is watching could be disruptive if the channel list completely re-renders.
        // For now, we will update it so they have fresh channels.
-       setEpgUrl(result.epgUrl);
+       setEpgUrl(playlist.epgUrl || result.epgUrl);
        updateMediaState(result.channels, playlist.id);
        setCategories(result.categories);
        if (!silent) {
@@ -334,8 +351,20 @@ export default function App() {
       
       <AutoplayResume enabled={!!activeSettings?.autoplayLastChannel} />
 
-      {/* LAYER 0: Background Player */}
-      <div className={`absolute inset-0 bg-black ${isImmersivePlayer || currentView === 'player' ? 'z-50' : 'z-0'}`}>
+      {/* LAYER 0: Player. Three placements:
+          - immersive/player view: full screen on top (z-50)
+          - Channels browser with a channel selected: docked preview box that
+            floats exactly over the browser's placeholder rect (z-40)
+          - otherwise: full-screen background layer (z-0) */}
+      <div
+        className={
+          isImmersivePlayer || currentView === 'player'
+            ? 'absolute inset-0 bg-black z-50'
+            : playerDock === 'preview' && currentView === 'channels' && hasActiveChannel
+              ? 'absolute top-4 right-4 w-96 h-[216px] bg-black z-40 rounded-xl overflow-hidden border border-white/10 shadow-2xl'
+              : 'absolute inset-0 bg-black z-0'
+        }
+      >
         <PlayerPreview playerPreference={playerPreference} />
       </div>
 
@@ -379,6 +408,9 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {/* Global search palette (works even while the player is up) */}
+      <CommandPalette isOpen={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} />
     </div>
   );
 }

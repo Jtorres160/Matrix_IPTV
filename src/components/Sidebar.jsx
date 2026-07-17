@@ -1,10 +1,12 @@
 import React from 'react';
-import { Tv, Film, ListVideo, ListMusic, Settings } from 'lucide-react';
+import { Tv, LayoutList, Film, ListVideo, ListMusic, Settings } from 'lucide-react';
 
 // NOTE: no 'favorites' entry — there is no route for it (favorites live as a
-// rail inside Live TV). A menu item without a route renders a blank screen.
+// rail inside Live TV and a category in Channels). A menu item without a
+// route renders a blank screen.
 const MENU_ITEMS = [
   { id: 'live-tv', label: 'Live TV', icon: Tv },
+  { id: 'channels', label: 'Channels', icon: LayoutList },
   { id: 'movies', label: 'Movies', icon: Film },
   { id: 'series', label: 'Series', icon: ListVideo },
   { id: 'playlists', label: 'Playlists', icon: ListMusic },

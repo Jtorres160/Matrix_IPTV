@@ -52,6 +52,11 @@ export const useAppStore = create((set) => ({
   isImmersivePlayer: false,
   setIsImmersivePlayer: (isImmersive) => set({ isImmersivePlayer: isImmersive }),
 
+  // Player dock: 'full' = background layer, 'preview' = docked preview box
+  // (only honored by the Channels browser view)
+  playerDock: 'full',
+  setPlayerDock: (dock) => set({ playerDock: dock }),
+
   // EPG State
   epgUrl: null,
   epgData: new Map(), // Map of channelId -> Array of programs

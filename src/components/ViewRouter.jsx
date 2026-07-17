@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import LiveTVView from './LiveTVView.jsx';
 import VODLibrary from './VODLibrary.jsx';
+import ChannelBrowserView from './ChannelBrowserView.jsx';
 import { useAppStore } from '../store/appStore';
 
 import SourceManagerView from './SourceManagerView.jsx';
@@ -9,6 +10,11 @@ const ROUTES = {
   'live-tv': (props) => (
     <div className="w-full h-full bg-black/40 backdrop-blur-sm pl-0 md:pl-[260px] pb-16 md:pb-0 transition-all duration-300">
       <LiveTVView isActive={props.isActive} />
+    </div>
+  ),
+  'channels': () => (
+    <div className="w-full h-full bg-[#0a1214] pl-0 md:pl-[260px] pb-16 md:pb-0">
+      <ChannelBrowserView />
     </div>
   ),
   'movies': (props) => (
