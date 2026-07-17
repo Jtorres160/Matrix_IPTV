@@ -59,8 +59,17 @@ export default function LiveTVView({ isActive = true }) {
     onGuideOpen: () => setIsGuideOpen(true)
   });
 
-  // Channel number entry and switching
-  useChannelInput(isActive && !isGuideOpen && !isLoadingPlaylist && channels.length > 0);
+  // Channel number entry and switching. `channelNumber` is the digits the
+  // user has typed so far — shown as an on-screen display below.
+  const { channelNumber } = useChannelInput(isActive && !isGuideOpen && !isLoadingPlaylist && channels.length > 0);
+
+  // Channel numbers match the 0-9 zapping semantics: position in the full
+  // channel list (playlist[index]), 1-based.
+  const channelNumbers = useMemo(() => {
+    const m = new Map();
+    channels.forEach((c, i) => m.set(c.id, i + 1));
+    return m;
+  }, [channels]);
   
   // Session tracking
   useWatchSession();
@@ -92,8 +101,6 @@ export default function LiveTVView({ isActive = true }) {
   };
 
   const handlePlayChannel = (channel) => {
-    performance.mark("player-mode-enter");
-    performance.mark("channel-change-start");
     addRecentlyWatched(channel.id);
     playMediaItem(channel);
   };
@@ -165,7 +172,15 @@ export default function LiveTVView({ isActive = true }) {
 
   return (
     <div className="flex flex-col h-full w-full bg-transparent overflow-y-auto no-scrollbar relative z-10 scroll-smooth">
-      
+
+      {/* Channel number OSD — feedback while typing digits to zap */}
+      {channelNumber && (
+        <div className="fixed top-8 right-8 z-50 px-8 py-4 bg-black/85 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl pointer-events-none">
+          <div className="text-5xl font-black text-white tracking-[0.2em] tabular-nums">{channelNumber}</div>
+          <div className="text-xs text-gray-400 mt-1 text-center uppercase tracking-widest">Channel</div>
+        </div>
+      )}
+
       {/* ── LIVE TV HERO (TRANSPARENT HOLE) ── */}
       {/* Takes up most of the screen, allowing Layer 0 video to shine through */}
       <div className="w-full h-[60vh] flex flex-col justify-between p-12 bg-gradient-to-b from-black/80 via-transparent to-black pointer-events-none">
@@ -292,14 +307,15 @@ export default function LiveTVView({ isActive = true }) {
           
           <div className="mt-6 flex-1 min-h-[500px]">
              {filteredChannels.length > 0 ? (
-               <VirtualizedChannelList 
-                 channels={filteredChannels} 
+               <VirtualizedChannelList
+                 channels={filteredChannels}
                  activeUrl={activeUrl}
                  onPlay={handlePlayChannel}
                  favorites={favorites}
                  onToggleFavorite={toggleFavorite}
                  getEpgForChannel={getEpgForChannel}
                  isActive={isActive}
+                 channelNumbers={channelNumbers}
                />
              ) : (
                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
@@ -367,7 +383,7 @@ function CategoryRibbon({ categories, activeCategory, setActiveCategory }) {
 }
 
 // Custom Virtualizer for full window scrolling compatibility
-function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onToggleFavorite, getEpgForChannel, isActive }) {
+function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onToggleFavorite, getEpgForChannel, isActive, channelNumbers }) {
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600); // Default assumption for the block
   const containerRef = useRef(null);
@@ -425,6 +441,11 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
               : 'hover:bg-white/5 bg-white/5 border-l-4 border-transparent'
           }`}
         >
+          {/* Channel number — matches 0-9 zapping */}
+          <div className="shrink-0 w-12 mr-2 text-right text-sm font-mono text-gray-500 tabular-nums">
+            {channelNumbers?.get(channel.id) || ''}
+          </div>
+
           {/* Logo */}
           <div className="shrink-0 mr-4 w-12 h-12 rounded bg-black/40 flex items-center justify-center p-1">
              {channel.logo ? (

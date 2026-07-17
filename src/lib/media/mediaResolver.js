@@ -63,6 +63,14 @@ export function getRouteForMediaItem(mediaItem) {
 export function playMediaItem(mediaItem) {
   if (!mediaItem) return;
 
+  // Fresh marks for the player-switch / channel-change perf measures.
+  // Set here (the single playback entry point) so plays started from
+  // Movies/Series don't measure against a stale mark from Live TV.
+  try {
+    performance.mark('player-mode-enter');
+    performance.mark('channel-change-start');
+  } catch (e) { /* perf API unavailable */ }
+
   const appStore = useAppStore.getState();
   const playerStore = usePlayerStore.getState();
 
