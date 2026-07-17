@@ -37,32 +37,40 @@ export function classifyMedia(row) {
   const url = normalize(row.stream_url || row.url || '');
   const name = normalize(row.name || row.title || '');
 
-  // 2. Check URL pattern heuristics (Strong indicators)
-  if (MOVIE_EXTENSIONS.some(ext => url.includes(ext))) {
-    return { type: 'movie', confidence: 0.95 };
-  }
-  if (url.includes('series') || url.match(/s\d{2}e\d{2}/) || url.includes('episode')) {
+  // A season/episode marker (S01E01, s1e1) in the name or URL. Tolerant of the
+  // 1- or 2-digit variants providers use.
+  const episodePattern = /\bs\d{1,2}\s?e\d{1,2}\b/;
+
+  // 2. Series is the STRONGEST content signal and must be checked before the
+  //    movie-extension heuristic. Xtream series episodes are delivered as
+  //    .mkv/.mp4 files on a /series/ path, so a naive "has a video extension =>
+  //    movie" test files every episode as a movie and leaves the Series tab
+  //    empty. Season/episode markers, an /episode tag, or an Xtream /series/
+  //    path win outright.
+  if (episodePattern.test(name) || episodePattern.test(url) ||
+      url.includes('/series/') || url.includes('episode')) {
     return { type: 'series', confidence: 0.95 };
   }
 
-  // 3. Check Group Title heuristics (Medium indicators)
-  if (MOVIE_GROUPS.some(g => groupTitle.includes(g))) {
-    // If it's in a movie group but has an M3U8 extension (typical of live TV), reduce confidence
-    if (url.includes('.m3u8') || url.includes('/live/')) {
-       return { type: 'movie', confidence: 0.4 }; 
-    }
-    return { type: 'movie', confidence: 0.8 };
+  // 3. Movie by video-file extension (now that series files are excluded).
+  if (MOVIE_EXTENSIONS.some(ext => url.includes(ext))) {
+    return { type: 'movie', confidence: 0.95 };
   }
+
+  // 4. Check Group Title heuristics (Medium indicators). Series group beats
+  //    movie group when both somehow match.
   if (SERIES_GROUPS.some(g => groupTitle.includes(g))) {
     if (url.includes('.m3u8') || url.includes('/live/')) {
-       return { type: 'series', confidence: 0.4 }; 
+       return { type: 'series', confidence: 0.4 };
     }
     return { type: 'series', confidence: 0.8 };
   }
-  
-  // 4. Check name for series patterns (Weak indicators)
-  if (name.match(/s\d{2}e\d{2}/) || name.includes('episode')) {
-    return { type: 'series', confidence: 0.7 };
+  if (MOVIE_GROUPS.some(g => groupTitle.includes(g))) {
+    // If it's in a movie group but has an M3U8 extension (typical of live TV), reduce confidence
+    if (url.includes('.m3u8') || url.includes('/live/')) {
+       return { type: 'movie', confidence: 0.4 };
+    }
+    return { type: 'movie', confidence: 0.8 };
   }
 
   // 5. Default fallback to Live TV

@@ -102,6 +102,17 @@ export default function LiveTVView({ isActive = true }) {
     return epgData.get(tvgId) || [];
   };
 
+  // Only surface categories that actually contain live channels. The raw
+  // `categories` list from the parser also includes VOD/Series groups (which
+  // live under Movies/Series), and picking those here would filter the list to
+  // nothing. Derive from the live channel set, like the Channels browser does.
+  const liveCategories = useMemo(() => {
+    const present = new Set();
+    channels.forEach((c) => (c.groups || []).forEach((g) => present.add(g)));
+    const hidden = activeSettings?.hiddenCategories || [];
+    return categories.filter((c) => present.has(c) && !hidden.includes(c));
+  }, [channels, categories, activeSettings?.hiddenCategories]);
+
   const handlePlayChannel = (channel) => {
     addRecentlyWatched(channel.id);
     playMediaItem(channel);
@@ -294,7 +305,7 @@ export default function LiveTVView({ isActive = true }) {
           <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">All Channels</h2>
           
           <CategoryRibbon
-            categories={categories.filter((c) => !(activeSettings?.hiddenCategories || []).includes(c))}
+            categories={liveCategories}
             activeCategory={activeCategory}
             setActiveCategory={setActiveCategory}
           />

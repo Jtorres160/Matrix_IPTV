@@ -1,9 +1,14 @@
 import React from 'react';
 import { LucidePlayCircle } from 'lucide-react';
+import { formatTime } from '../../lib/epg/epgTime.js';
 
 export default function ProgramCard({ program, isLive, onClick }) {
-  // A program is considered active if it's currently live
-  
+  // Prefer human clock times from the parsed start/stop; fall back to the
+  // legacy raw string only if this program predates the parsed-time EPG.
+  const timeLabel = (program.start != null && program.stop != null)
+    ? `${formatTime(program.start)} - ${formatTime(program.stop)}`
+    : program.time;
+
   return (
     <button
       data-tv-focusable="true"
@@ -25,7 +30,7 @@ export default function ProgramCard({ program, isLive, onClick }) {
       </div>
       
       <div className="text-xs text-gray-500 mt-1 truncate">
-        {program.time}
+        {timeLabel}
       </div>
       
       {/* Description overlay on focus */}
