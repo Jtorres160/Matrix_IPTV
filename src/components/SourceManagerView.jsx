@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useProfilesStore, useActiveProfile } from '../store/profileStore';
 import { useAppStore } from '../store/appStore.js';
-import { LucideLink, LucideFile, LucideServer, LucideGlobe, LucideTrash2, LucidePlay, LucideCheckCircle2, LucideAlertCircle } from 'lucide-react';
+import { LucideLink, LucideFile, LucideServer, LucideGlobe, LucideTrash2, LucidePlay, LucideCheckCircle2, LucideAlertCircle, LucideCalendarClock, LucideUsers, LucideRefreshCw, LucideLoader2 } from 'lucide-react';
 import { loadPlaylist } from '../lib/m3u/playlistService.js';
 import { savePlaylistToCache } from '../lib/m3u/playlistCache.js';
 import { resolveMediaItem } from '../lib/media/mediaResolver.js';
@@ -510,6 +510,95 @@ function StatusMessage({ status }) {
   );
 }
 
+function XtreamAccountPanel({ playlist }) {
+  const [state, setState] = useState({ status: 'loading', info: null, error: null });
+
+  const load = useCallback(() => {
+    const base = (playlist.serverUrl || '').replace(/\/+$/, '');
+    if (!base || !playlist.username) { setState({ status: 'error', error: 'Missing stored credentials.' }); return; }
+    setState({ status: 'loading', info: null, error: null });
+    const url = `${base}/player_api.php?username=${encodeURIComponent(playlist.username)}&password=${encodeURIComponent(playlist.password || '')}`;
+    fetch(url)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.user_info) setState({ status: 'ok', info: d, error: null });
+        else setState({ status: 'error', error: 'Provider did not return account info.' });
+      })
+      .catch(() => setState({ status: 'error', error: 'Could not reach the provider.' }));
+  }, [playlist.serverUrl, playlist.username, playlist.password]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const ui = state.info?.user_info;
+  const srv = state.info?.server_info;
+  const exp = ui?.exp_date ? new Date(Number(ui.exp_date) * 1000) : null;
+  const daysLeft = exp ? Math.ceil((exp.getTime() - Date.now()) / 86400000) : null;
+  const isActive = ui && (ui.status === 'Active' || ui.auth === 1 || ui.auth === '1');
+  const isTrial = ui && (ui.is_trial === '1' || ui.is_trial === 1);
+
+  return (
+    <div className="bg-[#123236] border border-gray-700 rounded-xl p-5 shadow-lg" data-xtream-account>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <LucideServer size={18} className="text-blue-400 shrink-0" />
+          <h3 className="text-lg font-bold text-white truncate">{playlist.name || 'Xtream Source'}</h3>
+          {ui && (
+            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isActive ? 'bg-green-600/25 text-green-300' : 'bg-red-600/25 text-red-300'}`}>
+              {isActive ? 'Active' : (ui.status || 'Inactive')}
+            </span>
+          )}
+          {isTrial && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/25 text-amber-300">Trial</span>}
+        </div>
+        <button onClick={load} title="Refresh" className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 shrink-0">
+          {state.status === 'loading' ? <LucideLoader2 size={16} className="animate-spin" /> : <LucideRefreshCw size={16} />}
+        </button>
+      </div>
+
+      {state.status === 'error' && (
+        <p className="text-sm text-red-300 flex items-center gap-2"><LucideAlertCircle size={15} /> {state.error}</p>
+      )}
+
+      {state.status === 'loading' && !ui && (
+        <p className="text-sm text-gray-400">Checking account status…</p>
+      )}
+
+      {ui && (
+        <div className="grid grid-cols-2 gap-4">
+          <InfoTile
+            icon={<LucideCalendarClock size={16} className="text-blue-400" />}
+            label="Expires"
+            value={exp ? exp.toLocaleDateString() : 'Unlimited'}
+            sub={daysLeft != null ? (daysLeft >= 0 ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} left` : `Expired ${Math.abs(daysLeft)}d ago`) : null}
+            danger={daysLeft != null && daysLeft <= 3}
+          />
+          <InfoTile
+            icon={<LucideUsers size={16} className="text-blue-400" />}
+            label="Connections"
+            value={`${ui.active_cons ?? 0} / ${ui.max_connections ?? '—'}`}
+            sub="active / allowed"
+          />
+          {srv?.url && (
+            <InfoTile icon={<LucideGlobe size={16} className="text-blue-400" />} label="Server" value={srv.url + (srv.port ? `:${srv.port}` : '')} />
+          )}
+          {srv?.timezone && (
+            <InfoTile icon={<LucideGlobe size={16} className="text-blue-400" />} label="Timezone" value={srv.timezone} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InfoTile({ icon, label, value, sub, danger }) {
+  return (
+    <div className="bg-black/25 rounded-lg p-3">
+      <div className="flex items-center gap-2 text-xs text-gray-400 mb-1">{icon}{label}</div>
+      <div className={`text-lg font-bold truncate ${danger ? 'text-red-300' : 'text-white'}`}>{value}</div>
+      {sub && <div className={`text-xs mt-0.5 ${danger ? 'text-red-400' : 'text-gray-500'}`}>{sub}</div>}
+    </div>
+  );
+}
+
 function XtreamManager() {
   const [name, setName] = useState('');
   const [server, setServer] = useState('');
@@ -520,6 +609,8 @@ function XtreamManager() {
   const abortControllerRef = useRef(null);
 
   const addM3uPlaylist = useProfilesStore((s) => s.addM3uPlaylist);
+  const activeProfile = useActiveProfile();
+  const xtreamPlaylists = (activeProfile?.playlists || []).filter((p) => p.sourceKind === 'xtream' && p.serverUrl);
   const canSubmit = server.trim() && username.trim() && password.trim() && !isProcessing;
 
   const handleAdd = async () => {
@@ -612,6 +703,13 @@ function XtreamManager() {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {xtreamPlaylists.length > 0 && (
+        <div className="mb-10 space-y-4">
+          <h2 className="text-2xl font-bold text-white">Your Xtream account{xtreamPlaylists.length > 1 ? 's' : ''}</h2>
+          {xtreamPlaylists.map((p) => <XtreamAccountPanel key={p.id} playlist={p} />)}
+        </div>
+      )}
+
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-white mb-2">Xtream Codes Login</h2>
         <p className="text-gray-400">Sign in with the server, username and password from your provider. Live TV, movies and series import automatically.</p>
