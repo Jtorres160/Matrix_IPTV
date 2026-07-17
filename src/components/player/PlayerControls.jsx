@@ -1,25 +1,40 @@
-import React from 'react';
-import { LucideMaximize, LucideMinimize, LucideVolume2, LucideVolumeX, LucidePause, LucidePlay, LucideSettings, LucideArrowLeft } from 'lucide-react';
+import React, { useState } from 'react';
+import { LucideMaximize, LucideMinimize, LucideVolume2, LucideVolumeX, LucidePause, LucidePlay, LucideArrowLeft, LucideRatio, LucideSubtitles } from 'lucide-react';
 import { usePlayerStore } from '../../player/playerStore.js';
 import { useAppStore } from '../../store/appStore.js';
+import { readTracks, setAudioTrack, setSubtitleTrack } from '../../lib/player/tracks.js';
+
+const FIT_LABEL = { contain: 'Fit', cover: 'Fill', fill: 'Stretch' };
 
 export default function PlayerControls() {
-  const { 
-    activeChannel, 
-    playbackState, 
-    isFullscreen, 
-    volume, 
-    muted, 
+  const {
+    activeChannel,
+    playbackState,
+    isFullscreen,
+    volume,
+    muted,
     showControls,
+    videoFit,
+    mediaHandles,
     play,
     pause,
     toggleFullscreen,
+    cycleVideoFit,
     setVolume,
     toggleMute,
     showControlsTemporarily
   } = usePlayerStore();
   const setCurrentView = useAppStore(s => s.setCurrentView);
   const setIsImmersivePlayer = useAppStore(s => s.setIsImmersivePlayer);
+
+  const [tracksOpen, setTracksOpen] = useState(false);
+  const [tracks, setTracks] = useState({ audio: [], subtitles: [], hasHls: false });
+
+  const openTracks = () => {
+    setTracks(readTracks(mediaHandles));
+    setTracksOpen((o) => !o);
+    showControlsTemporarily();
+  };
 
   // Single source of truth for "leave the player". Channels enter fullscreen by
   // flipping isImmersivePlayer (not currentView), so clearing only currentView
@@ -105,11 +120,46 @@ export default function PlayerControls() {
           </div>
 
           {/* Right Controls */}
-          <div className="flex items-center gap-6">
-            <button className="text-white hover:text-blue-400 transition-colors focus:outline-none">
-              <LucideSettings size={22} />
+          <div className="flex items-center gap-6 relative">
+            {/* Audio / subtitle tracks */}
+            <div className="relative">
+              <button
+                onClick={openTracks}
+                title="Audio & subtitles"
+                className="flex items-center gap-1.5 text-white hover:text-blue-400 transition-colors focus:outline-none"
+              >
+                <LucideSubtitles size={22} />
+              </button>
+              {tracksOpen && (
+                <div className="absolute bottom-full right-0 mb-3 w-56 bg-black/95 border border-white/15 rounded-xl p-2 shadow-2xl">
+                  <TrackSection
+                    title="Audio"
+                    tracks={tracks.audio}
+                    empty="No alternate audio"
+                    onPick={(id) => { setAudioTrack(mediaHandles, id); setTracks(readTracks(mediaHandles)); }}
+                  />
+                  <div className="my-2 border-t border-white/10" />
+                  <TrackSection
+                    title="Subtitles"
+                    tracks={tracks.subtitles}
+                    empty="No subtitles"
+                    onPick={(id) => { setSubtitleTrack(mediaHandles, id); setTracks(readTracks(mediaHandles)); }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Aspect ratio / zoom */}
+            <button
+              onClick={cycleVideoFit}
+              title="Aspect ratio"
+              className="flex items-center gap-1.5 text-white hover:text-blue-400 transition-colors focus:outline-none"
+            >
+              <LucideRatio size={22} />
+              <span className="text-xs font-semibold uppercase tracking-wide">{FIT_LABEL[videoFit] || 'Fit'}</span>
             </button>
-            <button 
+
+            <button
               onClick={toggleFullscreen}
               className="text-white hover:text-blue-400 transition-colors focus:outline-none"
             >
@@ -119,6 +169,31 @@ export default function PlayerControls() {
 
         </div>
       </div>
+    </div>
+  );
+}
+
+function TrackSection({ title, tracks, empty, onPick }) {
+  const selectable = tracks.filter((t) => !(title === 'Audio' && t.id === -1));
+  return (
+    <div>
+      <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">{title}</div>
+      {selectable.length === 0 ? (
+        <div className="px-2 py-1.5 text-xs text-gray-500 italic">{empty}</div>
+      ) : (
+        selectable.map((t) => (
+          <button
+            key={`${title}-${t.id}`}
+            onClick={() => onPick(t.id)}
+            className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-sm text-left transition-colors ${
+              t.active ? 'bg-blue-600/30 text-blue-300' : 'text-gray-200 hover:bg-white/10'
+            }`}
+          >
+            <span className="truncate">{t.name}</span>
+            {t.active && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />}
+          </button>
+        ))
+      )}
     </div>
   );
 }

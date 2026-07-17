@@ -30,7 +30,9 @@ export default function PlayerPreview({ playerPreference }) {
     setVolume,
     toggleTheater,
     previousChannel,
-    nextChannel
+    nextChannel,
+    videoFit,
+    setMediaHandles
   } = usePlayerStore();
 
   const [vlcAvailable, setVlcAvailable] = useState(false);
@@ -177,6 +179,10 @@ export default function PlayerPreview({ playerPreference }) {
           e.preventDefault();
           toggleTheater();
           break;
+        case 'a':
+          e.preventDefault();
+          usePlayerStore.getState().cycleVideoFit();
+          break;
         default:
           break;
       }
@@ -246,9 +252,9 @@ export default function PlayerPreview({ playerPreference }) {
 
   // --- ReactPlayer Implementation ---
   return (
-    <div 
+    <div
       ref={containerRef}
-      className={`relative bg-black z-0 transition-all duration-300 ${
+      className={`relative bg-black z-0 transition-all duration-300 fit-${videoFit} ${
         isFullscreen ? 'fixed inset-0 z-[9999]' : 'w-full h-full'
       } ${
         currentMode === 'theater' && !isFullscreen ? 'col-span-2' : ''
@@ -257,6 +263,13 @@ export default function PlayerPreview({ playerPreference }) {
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => setPlaybackState(playbackState)} // Trigger a re-eval of hide timer
     >
+      {/* Video sizing: how the picture fills the frame (aspect/zoom control). */}
+      <style>{`
+        .fit-contain video { object-fit: contain; }
+        .fit-cover video { object-fit: cover; }
+        .fit-fill video { object-fit: fill; }
+      `}</style>
+
       {/* UI Overlays */}
       <PlayerOverlay />
       <PlayerStatus />
@@ -276,6 +289,12 @@ export default function PlayerPreview({ playerPreference }) {
             onReady={() => {
               if (window.electronLog) window.electronLog.write('info', `[PlayerPreview] Video Ready / HLS Initialized for: ${activeUrl}`);
               console.log(`[PlayerPreview] Video Ready / HLS Initialized for: ${activeUrl}`);
+              // Publish handles so the track menu can enumerate/switch audio +
+              // subtitle tracks (hls.js instance or the raw <video> element).
+              setMediaHandles({
+                getInternalPlayer: (key) => { try { return playerRef.current?.getInternalPlayer(key); } catch { return null; } },
+                getVideo: () => containerRef.current?.querySelector('video') || null,
+              });
               setPlaybackState('playing');
               try { 
                 performance.measure("channel-change", "channel-change-start"); 

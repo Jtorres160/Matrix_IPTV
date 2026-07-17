@@ -16,10 +16,21 @@ export const usePlayerStore = create((set, get) => ({
   showControls: false,
   errorInfo: null,
   retryCount: 0,
-  
+  reconnecting: false,
+
   // A/V State
   volume: 1,
   muted: false,
+
+  // Video sizing: how the picture fills the frame. Cycled by the aspect control
+  // / 'a' key. 'contain' = fit (letterbox), 'cover' = fill (crop), 'fill' =
+  // stretch.
+  videoFit: 'contain',
+
+  // Live handles to the underlying media element / hls.js instance, published
+  // by PlayerPreview on ready so the track menu can enumerate + switch audio and
+  // subtitle tracks. Non-reactive; read on demand.
+  mediaHandles: null,
 
   // Channels Array (for previous/next navigation)
   playlist: [],
@@ -65,15 +76,29 @@ export const usePlayerStore = create((set, get) => ({
       activeUrl: channel.url,
       playbackState: 'buffering',
       errorInfo: null,
-      retryCount: 0
+      retryCount: 0,
+      reconnecting: false
     });
     get().showControlsTemporarily();
   },
+
+  setVideoFit: (fit) => set({ videoFit: fit }),
+  cycleVideoFit: () => {
+    const order = ['contain', 'cover', 'fill'];
+    const i = order.indexOf(get().videoFit);
+    set({ videoFit: order[(i + 1) % order.length] });
+    get().showControlsTemporarily();
+  },
+
+  setMediaHandles: (handles) => set({ mediaHandles: handles }),
 
   setPlaybackState: (state) => {
     const { playbackState, activeChannel } = get();
     if (state !== playbackState) {
       if (state === 'playing') {
+        // A successful play clears any reconnect state so a later drop starts a
+        // fresh backoff cycle.
+        if (get().retryCount !== 0 || get().reconnecting) set({ retryCount: 0, reconnecting: false });
         analytics.track(tvEvents.PLAYBACK_STARTED, { channelId: activeChannel?.id });
         if (playbackState === 'buffering' || playbackState === 'idle') {
            analytics.track(tvEvents.CHANNEL_SWITCH_COMPLETED, { channelId: activeChannel?.id });
@@ -128,28 +153,29 @@ export const usePlayerStore = create((set, get) => ({
 
   // --- RETRY LOGIC ---
 
+  // Auto-reconnect with backoff. Live streams drop routinely (provider hiccups,
+  // network blips); rather than dead-ending after two tries, keep reconnecting a
+  // few times with growing delays before giving up. A successful play resets the
+  // counter (see setPlaybackState).
   handleError: () => {
     const { retryCount, activeUrl } = get();
-    
     if (retryTimeout) clearTimeout(retryTimeout);
-    
-    if (retryCount === 0) {
-      set({ playbackState: 'error', errorInfo: 'Retrying... (1/2)', retryCount: 1 });
+
+    const MAX_RECONNECTS = 6;
+    const next = retryCount + 1;
+
+    if (next <= MAX_RECONNECTS) {
+      const delay = Math.min(2000 * next, 15000); // 2s, 4s, … capped at 15s
+      set({ playbackState: 'error', reconnecting: true, retryCount: next,
+            errorInfo: `Reconnecting… (${next}/${MAX_RECONNECTS})` });
       retryTimeout = setTimeout(() => {
-        // Trigger a reload by clearing and re-setting the URL
+        // Force a reload by clearing then re-setting the URL.
         set({ activeUrl: null });
-        setTimeout(() => set({ activeUrl }), 100);
-      }, 2000);
-    } 
-    else if (retryCount === 1) {
-      set({ playbackState: 'error', errorInfo: 'Retrying... (2/2)', retryCount: 2 });
-      retryTimeout = setTimeout(() => {
-        set({ activeUrl: null });
-        setTimeout(() => set({ activeUrl }), 100);
-      }, 5000);
-    } 
-    else {
-      set({ playbackState: 'error', errorInfo: 'Unable to play channel. Please try another stream.' });
+        setTimeout(() => set({ activeUrl }), 120);
+      }, delay);
+    } else {
+      set({ playbackState: 'error', reconnecting: false,
+            errorInfo: 'Unable to play this channel. The stream may be offline.' });
     }
   },
 

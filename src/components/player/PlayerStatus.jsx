@@ -4,15 +4,16 @@ import { useAppStore } from '../../store/appStore.js';
 import { LucideLoader2, LucideAlertCircle, LucideSkipForward, LucideArrowLeft } from 'lucide-react';
 
 export default function PlayerStatus() {
-  const { playbackState, errorInfo, activeChannel, retryCount, nextChannel } = usePlayerStore();
+  const { playbackState, errorInfo, activeChannel, reconnecting, nextChannel } = usePlayerStore();
 
   if (!activeChannel || playbackState === 'idle' || playbackState === 'playing') {
     return null;
   }
 
-  // Retries exhausted — offer a way out instead of a dead end
-  const isFatalError = playbackState === 'error' && retryCount >= 2;
-  const isRetrying = playbackState === 'error' && retryCount < 2;
+  // While reconnecting we keep retrying automatically; only once we've given up
+  // do we offer the manual escape hatch.
+  const isFatalError = playbackState === 'error' && !reconnecting;
+  const isRetrying = playbackState === 'error' && reconnecting;
 
   const exitToLiveTV = () => {
     const app = useAppStore.getState();
@@ -28,12 +29,12 @@ export default function PlayerStatus() {
           <>
             <LucideAlertCircle size={48} className="text-red-500 mb-4" />
             <h3 className="text-xl font-semibold text-white mb-1">
-              {isFatalError ? "Can't play this channel" : 'Playback Error'}
+              {isFatalError ? "Can't play this channel" : 'Reconnecting…'}
             </h3>
             <p className="text-sm text-gray-400">
               {isFatalError
-                ? 'The stream may be offline or geo-blocked.'
-                : (errorInfo || 'Unable to play stream')}
+                ? (errorInfo || 'The stream may be offline or geo-blocked.')
+                : (errorInfo || 'Trying to restore the stream…')}
             </p>
 
             {isRetrying && (
