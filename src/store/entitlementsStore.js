@@ -30,18 +30,26 @@ export const useEntitlementsStore = create((set, get) => ({
 
   activate: async (key) => {
     if (!hasLicenseBridge()) return { success: false, error: 'Not available in this build' };
-    const res = await window.electronLicense.activate(key);
-    if (res?.success) {
-      set({ tier: 'pro', email: res.entitlement.email, issued: res.entitlement.issued });
+    try {
+      const res = await window.electronLicense.activate(key);
+      if (res?.success && res?.entitlement) {
+        set({ tier: 'pro', email: res.entitlement.email, issued: res.entitlement.issued });
+      }
+      return res;
+    } catch (e) {
+      return { success: false, error: e.message };
     }
-    return res;
   },
 
   deactivate: async () => {
     if (!hasLicenseBridge()) return { success: false };
-    const res = await window.electronLicense.deactivate();
-    if (res?.success) set({ tier: 'free', email: null, issued: null });
-    return res;
+    try {
+      const res = await window.electronLicense.deactivate();
+      if (res?.success) set({ tier: 'free', email: null, issued: null });
+      return res;
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
   },
 
   isPro: () => get().tier === 'pro',
