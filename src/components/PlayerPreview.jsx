@@ -126,6 +126,12 @@ export default function PlayerPreview({ playerPreference }) {
       // Ignore if no active channel (we shouldn't steal keys when idle)
       if (!activeChannel) return;
 
+      // Only handle shortcuts while the player is the visible layer.
+      // Without this, once a channel has played the handler hijacks
+      // arrows/space across every menu and list in the app.
+      const { currentView, isImmersivePlayer } = useAppStore.getState();
+      if (currentView !== 'player' && !isImmersivePlayer) return;
+
       switch (e.key.toLowerCase()) {
         case ' ':
           e.preventDefault();
@@ -161,15 +167,10 @@ export default function PlayerPreview({ playerPreference }) {
           break;
         case 'escape':
         case 'backspace':
+          // Exit-player handling lives in the App-level handler
+          // (supreme_layout). Here we only sync fullscreen state.
           if (isFullscreen) {
-            // Browser handles exiting native fullscreen, but we sync state
             setFullscreen(false);
-          } else {
-            // If windowed, go back to Live TV
-            const currentView = useAppStore.getState().currentView;
-            if (currentView === 'player') {
-              useAppStore.getState().setCurrentView('live-tv');
-            }
           }
           break;
         case 't':

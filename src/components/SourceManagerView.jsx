@@ -4,6 +4,8 @@ import { useAppStore } from '../store/appStore.js';
 import { LucideLink, LucideFile, LucideServer, LucideGlobe, LucideTrash2, LucidePlay, LucideCheckCircle2, LucideAlertCircle } from 'lucide-react';
 import { loadPlaylist } from '../lib/m3u/playlistService.js';
 import { savePlaylistToCache } from '../lib/m3u/playlistCache.js';
+import { resolveMediaItem } from '../lib/media/mediaResolver.js';
+import { toMediaItem } from '../lib/media/mediaAdapter.js';
 
 export default function SourceManagerView() {
   const [activeTab, setActiveTab] = useState('m3u_url');
@@ -44,6 +46,12 @@ export default function SourceManagerView() {
             label="Stalker Portal" 
             badge="Soon"
           />
+          <TabButton 
+            active={activeTab === 'diagnostics'} 
+            onClick={() => setActiveTab('diagnostics')}
+            icon={<LucideAlertCircle size={18} />} 
+            label="Diagnostics" 
+          />
         </div>
       </div>
 
@@ -54,6 +62,7 @@ export default function SourceManagerView() {
             {activeTab === 'm3u_url' && <M3uUrlManager />}
             {activeTab === 'local_file' && <LocalFileManager />}
             {(activeTab === 'xtream' || activeTab === 'stalker') && <ComingSoonManager />}
+            {activeTab === 'diagnostics' && <MediaDiagnostics />}
             
             <div className="border-t border-gray-700 pt-8 mt-12">
               <h3 className="text-lg font-semibold text-white mb-4">Saved Playlists</h3>
@@ -330,7 +339,7 @@ function SavedPlaylistsList() {
   const activeProfile = useActiveProfile();
   const removePlaylist = useProfilesStore((s) => s.removePlaylist);
   const updatePlaylist = useProfilesStore((s) => s.updatePlaylist);
-  const setChannels = useAppStore((s) => s.setChannels);
+  const setMediaState = useAppStore((s) => s.setMediaState);
   const setCategories = useAppStore((s) => s.setCategories);
   const setEpgUrl = useAppStore((s) => s.setEpgUrl);
   const playlists = activeProfile?.playlists || [];
@@ -367,7 +376,8 @@ function SavedPlaylistsList() {
       await savePlaylistToCache(playlist.url, result);
       
       if (isFirst) {
-         setChannels(result.channels);
+         // Route through the media adapter so Movies/Series views stay in sync
+         setMediaState(result.channels.map(c => toMediaItem(c, playlist.id)));
          setCategories(result.categories);
          setEpgUrl(result.epgUrl);
       }
@@ -396,7 +406,9 @@ function SavedPlaylistsList() {
         updatePlaylist(playlist.id, { status: 'failed', lastError: 'Unable to refresh playlist.' });
       }
     } finally {
-      if (refreshingId === playlist.id) setRefreshingId(null);
+      // Compare against current state, not the stale closure value —
+      // otherwise the spinner never clears and refresh locks up.
+      setRefreshingId(prev => (prev === playlist.id ? null : prev));
     }
   };
 
@@ -494,6 +506,76 @@ function StatusMessage({ status }) {
     <div className={`flex items-center gap-2 text-sm font-medium ${config.color} animate-in fade-in duration-300`}>
       {config.icon}
       <span>{status.msg}</span>
+    </div>
+  );
+}
+
+function MediaDiagnostics() {
+  const media = useAppStore((s) => s.media);
+  const activeProfile = useActiveProfile();
+
+  const liveCount = media?.live?.length || 0;
+  const moviesCount = media?.movies?.length || 0;
+  const seriesCount = media?.series?.length || 0;
+  const unsortedCount = media?.unsorted?.length || 0;
+
+  const favorites = activeProfile?.favorites || [];
+  const resolvedFavs = favorites.map(id => resolveMediaItem(id)).filter(Boolean);
+  
+  const history = activeProfile?.watchHistory || [];
+  const resolvedHistory = history.map(item => {
+    const id = typeof item === 'string' ? item : (item.channelId || item.id);
+    return resolveMediaItem(id);
+  }).filter(Boolean);
+
+  return (
+    <div className="bg-black/20 rounded-xl p-8 border border-white/5 space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-white mb-2">Media Classification Report</h2>
+        <p className="text-gray-400">Current in-memory store metrics</p>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-white/5 p-4 rounded-lg border border-blue-500/20">
+          <div className="text-sm text-gray-400 mb-1">Live TV</div>
+          <div className="text-2xl font-bold text-blue-400">{liveCount}</div>
+        </div>
+        
+        <div className="bg-white/5 p-4 rounded-lg border border-purple-500/20">
+          <div className="text-sm text-gray-400 mb-1">Movies</div>
+          <div className="text-2xl font-bold text-purple-400">{moviesCount}</div>
+        </div>
+        
+        <div className="bg-white/5 p-4 rounded-lg border border-pink-500/20">
+          <div className="text-sm text-gray-400 mb-1">Series</div>
+          <div className="text-2xl font-bold text-pink-400">{seriesCount}</div>
+        </div>
+        
+        <div className="bg-white/5 p-4 rounded-lg border border-yellow-500/20">
+          <div className="text-sm text-gray-400 mb-1">Unknown (Unsorted)</div>
+          <div className="text-2xl font-bold text-yellow-400">{unsortedCount}</div>
+        </div>
+      </div>
+      
+      <div className="mt-8">
+        <h3 className="text-lg font-bold text-white mb-4 border-b border-white/10 pb-2">Identity Bridge Resolution</h3>
+        
+        <div className="space-y-4">
+          <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-white/5">
+            <span className="text-gray-300">Favorites Resolved</span>
+            <span className={`font-mono font-bold ${resolvedFavs.length === favorites.length ? 'text-green-400' : 'text-yellow-400'}`}>
+              {resolvedFavs.length} / {favorites.length}
+            </span>
+          </div>
+          
+          <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-white/5">
+            <span className="text-gray-300">Watch History Resolved</span>
+            <span className={`font-mono font-bold ${resolvedHistory.length === history.length ? 'text-green-400' : 'text-yellow-400'}`}>
+              {resolvedHistory.length} / {history.length}
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

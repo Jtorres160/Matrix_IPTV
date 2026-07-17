@@ -14,6 +14,7 @@ import { TV_CATEGORIES, getChannelsByCategory } from '../lib/tv/channelCategorie
 import { useChannelInput } from '../hooks/useChannelInput.js';
 import { useWatchSession } from '../hooks/useWatchSession.js';
 import { useTVBackNavigation } from '../hooks/useTVBackNavigation.js';
+import { resolveMediaItem, playMediaItem } from '../lib/media/mediaResolver.js';
 
 export default function LiveTVView({ isActive = true }) {
   useEffect(() => {
@@ -74,13 +75,13 @@ export default function LiveTVView({ isActive = true }) {
   const filteredChannels = useMemo(() => {
     let result = channels;
     if (activeCategory) {
-      result = result.filter(c => c.groups.includes(activeCategory));
+      result = result.filter(c => (c.groups || []).includes(activeCategory));
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(c => 
-        c.name.toLowerCase().includes(q) || 
-        c.groups.some(g => g.toLowerCase().includes(q))
+      result = result.filter(c =>
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.groups || []).some(g => (g || '').toLowerCase().includes(q))
       );
     }
     return result;
@@ -93,10 +94,8 @@ export default function LiveTVView({ isActive = true }) {
   const handlePlayChannel = (channel) => {
     performance.mark("player-mode-enter");
     performance.mark("channel-change-start");
-    setSelectedChannel(channel);
     addRecentlyWatched(channel.id);
-    setChannel(channel);
-    setCurrentView('player');
+    playMediaItem(channel);
   };
 
   // NEW RANKING AND INTELLIGENCE
@@ -118,18 +117,19 @@ export default function LiveTVView({ isActive = true }) {
   // Chronological recently watched for the old rail
   const chronologicalHistory = useMemo(() => {
     const historyToUse = watchHistory.length > 0 ? watchHistory : recentlyWatchedItems;
+    
     return [...historyToUse]
       .sort((a, b) => (b.lastWatchedAt || b.timestamp || 0) - (a.lastWatchedAt || a.timestamp || 0))
       .map(item => {
         const id = typeof item === 'string' ? item : (item.channelId || item.id);
         return {
-          channel: channels.find(c => c.id === id),
+          channel: resolveMediaItem(id),
           timestamp: item.lastWatchedAt || item.timestamp || Date.now(),
           watchDuration: item.totalWatchSeconds || item.watchDuration || 0
         };
       })
       .filter(x => x.channel);
-  }, [watchHistory, recentlyWatchedItems, channels]);
+  }, [watchHistory, recentlyWatchedItems]);
 
   // EMPTY STATES
   if (isLoadingPlaylist) {
@@ -385,8 +385,9 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
       }
     };
     
-    // Listen to parent scroll container (the main div)
-    const parent = document.querySelector('.overflow-y-auto');
+    // Listen to our own scroll ancestor, not the first `.overflow-y-auto`
+    // in the document (that can be a different view's container).
+    const parent = containerRef.current?.closest('.overflow-y-auto');
     if (parent) {
       parent.addEventListener('scroll', handleScroll, { passive: true });
       return () => parent.removeEventListener('scroll', handleScroll);

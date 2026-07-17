@@ -2,12 +2,16 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useProfilesStore } from '../store/profileStore';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import VODDetailOverlay from './VODDetailOverlay';
+import { useAppStore } from '../store/appStore.js';
+import { playMediaItem } from '../lib/media/mediaResolver.js';
 
 const ROW_HEIGHT = 280;
 const POSTER_WIDTH = 160;
 const POSTER_HEIGHT = 240;
 
 export default function VODLibrary({ type = 'vod', onPlayStream }) {
+  // ViewRouter passes 'movies' / 'series'; older callers pass 'vod'.
+  const isMovies = type === 'vod' || type === 'movies';
   const activePlaylistId = useProfilesStore((s) => s.activePlaylistId);
   
   const [categories, setCategories] = useState([]);
@@ -19,36 +23,87 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
   const [scrollTop, setScrollTop] = useState(0);
   const [activeIndex, setActiveIndex] = useState(0);
 
+  const media = useAppStore((s) => s.media);
+
   useEffect(() => {
-    if (!activePlaylistId) return;
     const loadCategories = async () => {
-      const cats = type === 'vod' 
-        ? await window.electronDB.getVODCategories(activePlaylistId)
-        : await window.electronDB.getSeriesCategories(activePlaylistId);
+      // 1. Fetch from DB (Xtream / dedicated DB tables) — optional, guarded:
+      // electronDB is absent in pure-browser dev and may reject on old schemas.
+      let dbCats = [];
+      if (activePlaylistId && window.electronDB) {
+        try {
+          dbCats = (isMovies
+            ? await window.electronDB.getVODCategories(activePlaylistId)
+            : await window.electronDB.getSeriesCategories(activePlaylistId)) || [];
+        } catch (e) {
+          console.warn('[VODLibrary] DB category fetch failed (non-fatal):', e);
+        }
+      }
+
+      // 2. Fetch from in-memory M3U categorized state
+      const storeItems = isMovies ? media.movies : media.series;
+      const storeGroups = {};
+      storeItems.forEach(item => {
+        const g = item.group || 'Uncategorized';
+        if (!storeGroups[g]) storeGroups[g] = [];
+        storeGroups[g].push(item);
+      });
+
+      const storeCats = Object.keys(storeGroups);
       
-      setCategories(cats);
+      // Merge unique categories
+      const mergedCats = [...new Set([...dbCats, ...storeCats])];
+      setCategories(mergedCats);
       
       // Eagerly load the first few categories
       const initialData = {};
-      for (let i = 0; i < Math.min(cats.length, 5); i++) {
-        const items = type === 'vod'
-          ? await window.electronDB.getVODsByCategory(activePlaylistId, cats[i], 50, 0)
-          : await window.electronDB.getSeriesByCategory(activePlaylistId, cats[i], 50, 0);
-        initialData[cats[i]] = items;
+      for (let i = 0; i < Math.min(mergedCats.length, 5); i++) {
+        const cat = mergedCats[i];
+        let items = [];
+        if (dbCats.includes(cat) && window.electronDB) {
+          try {
+            items = (isMovies
+              ? await window.electronDB.getVODsByCategory(activePlaylistId, cat, 50, 0)
+              : await window.electronDB.getSeriesByCategory(activePlaylistId, cat, 50, 0)) || [];
+          } catch (e) {
+            console.warn('[VODLibrary] DB item fetch failed (non-fatal):', e);
+          }
+        }
+        if (storeGroups[cat]) {
+          items = [...items, ...storeGroups[cat]];
+        }
+        initialData[cat] = items;
       }
       setCategoryData(initialData);
     };
     loadCategories();
-  }, [activePlaylistId, type]);
+  }, [activePlaylistId, isMovies, media]);
 
   // Load category data dynamically as user scrolls down
   const loadCategory = useCallback(async (category) => {
-    if (!activePlaylistId || categoryData[category]) return;
-    const items = type === 'vod'
-      ? await window.electronDB.getVODsByCategory(activePlaylistId, category, 50, 0)
-      : await window.electronDB.getSeriesByCategory(activePlaylistId, category, 50, 0);
+    if (categoryData[category]) return;
+
+    let items = [];
+    // DB fetch
+    if (activePlaylistId && window.electronDB) {
+      try {
+        items = (isMovies
+          ? await window.electronDB.getVODsByCategory(activePlaylistId, category, 50, 0)
+          : await window.electronDB.getSeriesByCategory(activePlaylistId, category, 50, 0)) || [];
+      } catch (e) {
+        // Might not exist in DB
+      }
+    }
+
+    // AppStore fetch
+    const storeItems = isMovies ? media.movies : media.series;
+    const storeMatches = storeItems.filter(item => (item.group || 'Uncategorized') === category);
+    if (storeMatches.length > 0) {
+      items = [...items, ...storeMatches];
+    }
+
     setCategoryData(prev => ({ ...prev, [category]: items }));
-  }, [activePlaylistId, type, categoryData]);
+  }, [activePlaylistId, isMovies, categoryData, media]);
 
   // Handle scrolling and focus
   const handleScroll = useCallback((e) => {
@@ -105,13 +160,14 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
   return (
     <div style={styles.wrapper}>
       {selectedVOD && (
-        <VODDetailOverlay 
-          item={selectedVOD} 
-          type={type} 
+        <VODDetailOverlay
+          item={selectedVOD}
+          type={isMovies ? 'vod' : 'series'}
           onClose={() => setSelectedVOD(null)} 
-          onPlay={(url) => {
+          onPlay={() => {
+            const item = selectedVOD;
             setSelectedVOD(null);
-            onPlayStream(url);
+            playMediaItem(item);
           }}
         />
       )}
@@ -135,9 +191,21 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
 
         <div style={{ padding: '40px 0 20px 40px' }}>
           <h1 style={{ color: '#fff', fontSize: '2.5rem', margin: 0, fontWeight: 700 }}>
-            {type === 'vod' ? 'Movies' : 'TV Series'}
+            {isMovies ? 'Movies' : 'TV Series'}
           </h1>
         </div>
+
+        {categories.length === 0 && (
+          <div style={{ padding: '20px 40px', color: '#9aa0a6', maxWidth: '640px' }}>
+            <p style={{ fontSize: '1.2rem', margin: 0 }}>
+              {isMovies ? 'No movies found in your sources.' : 'No series found in your sources.'}
+            </p>
+            <p style={{ fontSize: '0.95rem', marginTop: '10px', lineHeight: 1.5 }}>
+              Content appears here when a playlist contains {isMovies ? 'video-on-demand movies' : 'TV series episodes'}.
+              Live TV channels stay under the Live TV tab.
+            </p>
+          </div>
+        )}
 
         <div style={{ display: 'grid', gridAutoRows: `${ROW_HEIGHT}px` }}>
           {categories.length > 0 && (
@@ -155,10 +223,12 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
                 
                 <div style={{ display: 'flex', gap: '20px', overflowX: 'visible' }}>
                   {items.map((item, colIndex) => {
-                    const posterUrl = type === 'vod' ? item.stream_icon : item.cover;
+                    // DB rows carry stream_icon/cover; adapter MediaItems carry poster/logo
+                    const posterUrl = (isMovies ? item.stream_icon : item.cover) || item.poster || item.logo || null;
+                    const itemName = item.name || item.title || 'Untitled';
                     return (
                       <div
-                        key={item.stream_id || item.series_id}
+                        key={item.stream_id || item.series_id || item.id || colIndex}
                         className="vod-card"
                         data-nav-zone="vod-library"
                         data-nav-row={actualIndex}
@@ -179,16 +249,16 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
                         }}
                       >
                         {posterUrl ? (
-                          <img 
-                            src={posterUrl} 
-                            alt={item.name} 
+                          <img
+                            src={posterUrl}
+                            alt={itemName}
                             loading="lazy"
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                             onError={(e) => { e.target.style.display = 'none'; }}
                           />
                         ) : (
                           <div style={{ padding: '15px', color: '#888', display: 'flex', alignItems: 'center', height: '100%', textAlign: 'center' }}>
-                            {item.name}
+                            {itemName}
                           </div>
                         )}
                       </div>

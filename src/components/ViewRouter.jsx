@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef } from 'react';
 import LiveTVView from './LiveTVView.jsx';
 import VODLibrary from './VODLibrary.jsx';
 import { useAppStore } from '../store/appStore';
@@ -30,16 +30,16 @@ const ROUTES = {
 
 export default function ViewRouter({ onPlayStream }) {
   const currentView = useAppStore((s) => s.currentView);
-  const channels = useAppStore((s) => s.channels);
-  const epgData = useAppStore((s) => s.epgData);
 
   const lastViewRef = useRef(currentView === 'player' ? 'live-tv' : currentView);
 
-  useEffect(() => {
-    if (currentView !== "player") {
-      lastViewRef.current = currentView;
-    }
-  }, [currentView]);
+  // Update the ref during render, not in an effect. An effect runs *after*
+  // render, which made every navigation display the previous view (one-click
+  // lag). The ref exists only to keep the last real view mounted while
+  // currentView === 'player'.
+  if (currentView !== 'player') {
+    lastViewRef.current = currentView;
+  }
 
   const activeRoute = lastViewRef.current;
   const RouteComponent = ROUTES[activeRoute];
@@ -50,5 +50,5 @@ export default function ViewRouter({ onPlayStream }) {
 
   const isActive = currentView !== 'player';
 
-  return <RouteComponent channels={channels} epgData={epgData} onPlayStream={onPlayStream} isActive={isActive} />;
+  return <RouteComponent onPlayStream={onPlayStream} isActive={isActive} />;
 }

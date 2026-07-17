@@ -58,8 +58,11 @@ export function parseM3UChannels(text) {
 
       const tvgIdMatch = meta.match(/tvg-id="([^"]+)"/i);
       const tvgId = tvgIdMatch ? tvgIdMatch[1].trim() : null;
-      
-      parsed.push({ name, url, group, tvgId });
+
+      const logoMatch = meta.match(/tvg-logo="([^"]+)"/i);
+      const logo = logoMatch ? logoMatch[1].trim() : null;
+
+      parsed.push({ name, url, group, tvgId, logo });
     }
   }
   return parsed;
@@ -73,11 +76,12 @@ export function processPlaylistText(text) {
     const groups = mapGroupToAllowed(it.group);
     return { 
       id: `${it.name}-${idx}`, 
-      name: it.name, 
-      status: 'LIVE', 
-      url: it.url, 
+      name: it.name,
+      status: 'LIVE',
+      url: it.url,
       groups: groups,
-      tvgId: it.tvgId
+      tvgId: it.tvgId,
+      logo: it.logo
     };
   });
   

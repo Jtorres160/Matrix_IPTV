@@ -15,6 +15,7 @@ export function useChannelInput(isActive = true) {
   const activeUrl = usePlayerStore(s => s.activeUrl);
   const setChannel = usePlayerStore(s => s.setChannel);
   const setSelectedChannel = useAppStore(s => s.setSelectedChannel);
+  const setIsImmersivePlayer = useAppStore(s => s.setIsImmersivePlayer);
   
   const { switchToLastChannel } = usePreviousChannel();
 
@@ -30,8 +31,9 @@ export function useChannelInput(isActive = true) {
       });
       setChannel(channel);
       setSelectedChannel(channel);
+      setIsImmersivePlayer(true);
     }
-  }, [playlist, setChannel, setSelectedChannel]);
+  }, [playlist, setChannel, setSelectedChannel, setIsImmersivePlayer]);
 
   const switchChannel = useCallback((direction) => {
     if (!playlist.length) return;
@@ -53,7 +55,8 @@ export function useChannelInput(isActive = true) {
     });
     setChannel(nextChannel);
     setSelectedChannel(nextChannel);
-  }, [playlist, activeUrl, setChannel, setSelectedChannel]);
+    setIsImmersivePlayer(true);
+  }, [playlist, activeUrl, setChannel, setSelectedChannel, setIsImmersivePlayer]);
 
   useEffect(() => {
     if (!isActive) return;

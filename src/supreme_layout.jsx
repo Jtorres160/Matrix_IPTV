@@ -7,6 +7,7 @@ import { getPlaylistFromCache, savePlaylistToCache } from "./lib/m3u/playlistCac
 import { runChannelParityCheck, loadDbChannels } from "./lib/tv/dbChannelAdapter.js";
 import { runIdentityBridgeDiagnostics } from "./lib/tv/identityBridge.js";
 import { DB_CHANNEL_PARITY, USE_DB_CHANNELS } from "./config/featureFlags.js";
+import { toMediaItem } from "./lib/media/mediaAdapter.js";
 
 import BottomNavigationBar from "./components/BottomNavigationBar.jsx";
 import Sidebar from "./components/Sidebar.jsx";
@@ -33,31 +34,59 @@ export default function App() {
   // Modals and UI overlays
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-  // App Store bindings
-  const {
-    currentView,
-    setCurrentView,
-    setChannels,
-    setCategories,
-    setActiveCategory,
-    setSelectedChannel,
-    setEpgData,
-    setEpgUrl,
-    epgUrl,
-    setIsLoadingPlaylist,
-    setPlaylistMessage,
-    setIsLoadingEpg,
-    isLoadingPlaylist,
-    isLoadingEpg,
-    playlistMessage,
-    resetVolatileState
-  } = useAppStore();
+  // App Store bindings — individual selectors so App only re-renders when the
+  // values it actually uses change (a whole-store subscription re-rendered the
+  // entire tree on every store write, e.g. each EPG/message update).
+  const currentView = useAppStore((s) => s.currentView);
+  const setCurrentView = useAppStore((s) => s.setCurrentView);
+  const setMediaState = useAppStore((s) => s.setMediaState);
+  const setCategories = useAppStore((s) => s.setCategories);
+  const setActiveCategory = useAppStore((s) => s.setActiveCategory);
+  const setSelectedChannel = useAppStore((s) => s.setSelectedChannel);
+  const setEpgData = useAppStore((s) => s.setEpgData);
+  const setEpgUrl = useAppStore((s) => s.setEpgUrl);
+  const epgUrl = useAppStore((s) => s.epgUrl);
+  const setIsLoadingPlaylist = useAppStore((s) => s.setIsLoadingPlaylist);
+  const setPlaylistMessage = useAppStore((s) => s.setPlaylistMessage);
+  const setIsLoadingEpg = useAppStore((s) => s.setIsLoadingEpg);
+  const isLoadingPlaylist = useAppStore((s) => s.isLoadingPlaylist);
+  const isLoadingEpg = useAppStore((s) => s.isLoadingEpg);
+  const resetVolatileState = useAppStore((s) => s.resetVolatileState);
+  const isImmersivePlayer = useAppStore((s) => s.isImmersivePlayer);
+  const setIsImmersivePlayer = useAppStore((s) => s.setIsImmersivePlayer);
 
   useEffect(() => {
     const lastView = localStorage.getItem('matrix_last_view');
     if (lastView) {
       setCurrentView(lastView);
     }
+  }, []);
+
+  // Global Keyboard Navigation (Back/Escape).
+  // Single owner of "exit the player" — reads fresh store state instead of
+  // closures. Multiple stale-closure handlers previously each cleared only
+  // part of the player state, so exiting took two Escape presses.
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const key = e.key.toLowerCase();
+      if (key !== 'escape' && key !== 'backspace') return;
+
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+
+      // Native fullscreen: let the browser exit it; don't also leave the player.
+      if (document.fullscreenElement) return;
+
+      const state = useAppStore.getState();
+      if (state.isImmersivePlayer || state.currentView === 'player') {
+        state.setIsImmersivePlayer(false);
+        if (state.currentView === 'player') state.setCurrentView('live-tv');
+      } else if (state.currentView !== 'live-tv') {
+        state.setCurrentView('live-tv');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   useEffect(() => {
@@ -124,6 +153,15 @@ export default function App() {
     loadEPG();
   }, [epgUrl]);
 
+  const updateMediaState = (rawChannels, playlistId) => {
+    if (!rawChannels || rawChannels.length === 0) {
+      setMediaState([]);
+      return;
+    }
+    const mediaItems = rawChannels.map(c => toMediaItem(c, playlistId));
+    setMediaState(mediaItems);
+  };
+
   // M3U Loading Logic
   async function loadM3UPlaylist(playlist) {
     setPlaylistMessage("");
@@ -133,7 +171,7 @@ export default function App() {
     const cached = await getPlaylistFromCache(playlist.url);
     if (cached) {
       setEpgUrl(cached.epgUrl);
-      setChannels(cached.channels);
+      updateMediaState(cached.channels, playlist.id);
       setCategories(cached.categories);
       setActiveCategory(null);
       setSelectedChannel(null);
@@ -166,7 +204,7 @@ export default function App() {
        // However, updating channels while the user is watching could be disruptive if the channel list completely re-renders.
        // For now, we will update it so they have fresh channels.
        setEpgUrl(result.epgUrl);
-       setChannels(result.channels);
+       updateMediaState(result.channels, playlist.id);
        setCategories(result.categories);
        if (!silent) {
          setPlaylistMessage(`Found ${result.channelCount} channels.`);
@@ -204,7 +242,7 @@ export default function App() {
                const dbLoad = await loadDbChannels(playlist.id);
                if (dbLoad.success && dbLoad.channels.length > 0) {
                  activeChannels = dbLoad.channels;
-                 setChannels(dbLoad.channels);
+                 updateMediaState(dbLoad.channels, playlist.id);
                  setCategories(dbLoad.categories);
                  console.info(`[Matrix_IPTV] Live TV hydrated from SQLite: ${dbLoad.channels.length} channels (USE_DB_CHANNELS=true).`);
                } else {
@@ -242,7 +280,7 @@ export default function App() {
        if (!silent) {
          setPlaylistMessage(`Failed to load ${playlist.name || 'playlist'}. ${result.error}`);
          setIsLoadingPlaylist(false);
-         setChannels([]); // Clear channels to trigger empty state in Live TV
+         setMediaState([]); // Clear channels to trigger empty state in Live TV
        }
        updatePlaylist(playlist.id, { 
          status: 'failed', 
@@ -267,7 +305,7 @@ export default function App() {
         setPlaylistMessage("No EPG URL found in playlist header.");
       }
       
-      setChannels(channels);
+      updateMediaState(channels, 'local-file');
       setCategories(categories);
       setActiveCategory(null);
       setSelectedChannel(null);
@@ -289,15 +327,15 @@ export default function App() {
     <div className={`relative w-screen h-screen overflow-hidden font-sans ${darkMode ? "bg-[#0a1f22] text-gray-100" : "bg-gray-100 text-gray-900"}`}>
       
       {/* LAYER 0: Background Player */}
-      <div className={`absolute inset-0 bg-black ${currentView === 'player' ? 'z-50' : 'z-0'}`}>
+      <div className={`absolute inset-0 bg-black ${isImmersivePlayer || currentView === 'player' ? 'z-50' : 'z-0'}`}>
         <PlayerPreview playerPreference={playerPreference} />
       </div>
 
       <div 
         className={`absolute inset-0 transition-opacity duration-300 ${
-          currentView === 'player' ? 'opacity-0 pointer-events-none' : 'opacity-100'
+          isImmersivePlayer || currentView === 'player' ? 'opacity-0 pointer-events-none' : 'opacity-100'
         }`}
-        aria-hidden={currentView === 'player'}
+        aria-hidden={isImmersivePlayer || currentView === 'player'}
       >
         {/* Layer 1 (z-10): Active View Routing */}
         <div className="absolute inset-0 z-10 pointer-events-auto">
