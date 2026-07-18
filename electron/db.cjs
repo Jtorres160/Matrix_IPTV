@@ -376,8 +376,8 @@ function _prepareStatements() {
 
   // ── VOD and Series Queries ───────────────────────────────────────────────
   stmts.insertVOD = db.prepare(`
-    INSERT INTO vod_streams (playlist_id, stream_id, name, stream_icon, category_id, group_title, rating, added, container_extension)
-    VALUES (@playlist_id, @stream_id, @name, @stream_icon, @category_id, @group_title, @rating, @added, @container_extension)
+    INSERT INTO vod_streams (playlist_id, stream_id, name, stream_icon, category_id, group_title, rating, added, container_extension, stream_url)
+    VALUES (@playlist_id, @stream_id, @name, @stream_icon, @category_id, @group_title, @rating, @added, @container_extension, @stream_url)
   `);
 
   stmts.clearPlaylistVODs = db.prepare(`
@@ -408,6 +408,30 @@ function _prepareStatements() {
   stmts.getSeriesCategories = db.prepare(`
     SELECT DISTINCT group_title FROM series WHERE playlist_id = ? AND group_title IS NOT NULL AND group_title != '' ORDER BY group_title ASC
   `);
+
+  // ── Series Episodes (M3U parity) ─────────────────────────────────────────
+  stmts.insertSeriesEpisode = db.prepare(`
+    INSERT INTO series_episodes (playlist_id, series_key, season, episode, name, title, stream_url, logo, group_title)
+    VALUES (@playlist_id, @series_key, @season, @episode, @name, @title, @stream_url, @logo, @group_title)
+  `);
+
+  stmts.clearPlaylistSeriesEpisodes = db.prepare(`
+    DELETE FROM series_episodes WHERE playlist_id = ?
+  `);
+
+  stmts.getSeriesEpisodes = db.prepare(`
+    SELECT * FROM series_episodes WHERE playlist_id = ? AND series_key = ?
+    ORDER BY season ASC, episode ASC
+  `);
+
+  stmts.getSeriesEpisodesByCategory = db.prepare(`
+    SELECT * FROM series_episodes WHERE playlist_id = ? AND group_title = ?
+    ORDER BY series_key ASC, season ASC, episode ASC LIMIT ? OFFSET ?
+  `);
+
+  stmts.getVODCount = db.prepare(`SELECT COUNT(*) AS count FROM vod_streams WHERE playlist_id = ?`);
+  stmts.getSeriesCount = db.prepare(`SELECT COUNT(*) AS count FROM series WHERE playlist_id = ?`);
+  stmts.getEpisodeCount = db.prepare(`SELECT COUNT(*) AS count FROM series_episodes WHERE playlist_id = ?`);
 }
 
 // ── Playlist Operations ──────────────────────────────────────────────────────
@@ -712,7 +736,8 @@ function insertVODBatch(playlistId, vods, chunkSize = 500) {
           group_title: vod.group_title || null,
           rating: vod.rating || 0,
           added: vod.added || null,
-          container_extension: vod.container_extension || null
+          container_extension: vod.container_extension || null,
+          stream_url: vod.stream_url || null,
         });
       }
     });
@@ -776,6 +801,56 @@ function getSeriesByCategory(playlistId, groupTitle, limit = 200, offset = 0) {
 function getSeriesCategories(playlistId) {
   _ensureDB();
   return stmts.getSeriesCategories.all(playlistId).map(r => r.group_title);
+}
+
+function insertSeriesEpisodesBatch(playlistId, episodes, chunkSize = 500) {
+  _ensureDB();
+  let inserted = 0;
+  for (let i = 0; i < episodes.length; i += chunkSize) {
+    const chunk = episodes.slice(i, i + chunkSize);
+    const txn = db.transaction((rows) => {
+      for (const ep of rows) {
+        stmts.insertSeriesEpisode.run({
+          playlist_id: playlistId,
+          series_key: ep.series_key,
+          season: ep.season ?? 1,
+          episode: ep.episode ?? 0,
+          name: ep.name || 'Unknown Episode',
+          title: ep.title || null,
+          stream_url: ep.stream_url,
+          logo: ep.logo || null,
+          group_title: ep.group_title || null,
+        });
+      }
+    });
+    txn(chunk);
+    inserted += chunk.length;
+  }
+  return { inserted };
+}
+
+function clearPlaylistSeriesEpisodes(playlistId) {
+  _ensureDB();
+  return stmts.clearPlaylistSeriesEpisodes.run(playlistId);
+}
+
+function getSeriesEpisodes(playlistId, seriesKey) {
+  _ensureDB();
+  return stmts.getSeriesEpisodes.all(playlistId, seriesKey);
+}
+
+function getSeriesEpisodesByCategory(playlistId, groupTitle, limit = 5000, offset = 0) {
+  _ensureDB();
+  return stmts.getSeriesEpisodesByCategory.all(playlistId, groupTitle, limit, offset);
+}
+
+function getMediaStats(playlistId) {
+  _ensureDB();
+  return {
+    vodCount: stmts.getVODCount.get(playlistId).count,
+    seriesCount: stmts.getSeriesCount.get(playlistId).count,
+    episodeCount: stmts.getEpisodeCount.get(playlistId).count,
+  };
 }
 
 /**
@@ -902,6 +977,11 @@ module.exports = {
   clearPlaylistSeries,
   getSeriesByCategory,
   getSeriesCategories,
+  insertSeriesEpisodesBatch,
+  clearPlaylistSeriesEpisodes,
+  getSeriesEpisodes,
+  getSeriesEpisodesByCategory,
+  getMediaStats,
 
   // Parental Control
   addLockedCategory: (playlistId, groupTitle) => stmts.addLockedCategory.run(playlistId, groupTitle),

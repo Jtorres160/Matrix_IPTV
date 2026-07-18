@@ -740,6 +740,33 @@ function registerIPCHandlers(mainWindow) {
     }
   });
 
+  ipcMain.handle('db:getSeriesEpisodes', (_e, playlistId, seriesKey) => {
+    try {
+      return db.getSeriesEpisodes(playlistId, seriesKey);
+    } catch (err) {
+      console.error('[IPC] db:getSeriesEpisodes error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:getSeriesEpisodesByCategory', (_e, playlistId, groupTitle, limit = 5000, offset = 0) => {
+    try {
+      return db.getSeriesEpisodesByCategory(playlistId, groupTitle, limit, offset);
+    } catch (err) {
+      console.error('[IPC] db:getSeriesEpisodesByCategory error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:getMediaStats', (_e, playlistId) => {
+    try {
+      return db.getMediaStats(playlistId);
+    } catch (err) {
+      console.error('[IPC] db:getMediaStats error:', err);
+      return { vodCount: 0, seriesCount: 0, episodeCount: 0 };
+    }
+  });
+
   // ── EPG Queries ──────────────────────────────────────────────────────
 
   /**

@@ -88,6 +88,9 @@ contextBridge.exposeInMainWorld('electronDB', {
   getVODCategories:  (playlistId) => ipcRenderer.invoke('db:getVODCategories', playlistId),
   getSeriesByCategory: (playlistId, groupTitle, limit, offset) => ipcRenderer.invoke('db:getSeriesByCategory', playlistId, groupTitle, limit, offset),
   getSeriesCategories: (playlistId) => ipcRenderer.invoke('db:getSeriesCategories', playlistId),
+  getSeriesEpisodes: (playlistId, seriesKey) => ipcRenderer.invoke('db:getSeriesEpisodes', playlistId, seriesKey),
+  getSeriesEpisodesByCategory: (playlistId, groupTitle, limit, offset) => ipcRenderer.invoke('db:getSeriesEpisodesByCategory', playlistId, groupTitle, limit, offset),
+  getMediaStats: (playlistId) => ipcRenderer.invoke('db:getMediaStats', playlistId),
   getEPGForChannel:  (channelId, startTime, endTime) => ipcRenderer.invoke('db:getEPGForChannel', channelId, startTime, endTime),
   onSyncProgress:    (callback) => {
     const handler = (_, data) => callback(data);
