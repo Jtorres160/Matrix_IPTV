@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { buildShowsFromDbEpisodes } from '../src/lib/media/dbSeriesAdapter.js';
+import { buildShowsFromDbEpisodes, fetchAllSeriesEpisodes } from '../src/lib/media/dbSeriesAdapter.js';
 
 const seriesRows = [
   { id: 1, series_id: 'm3u-show-bb', name: 'Breaking Bad', cover: 'http://logo/bb.png', group_title: 'Series' },
@@ -35,5 +35,33 @@ assert.equal(orphan.poster, 'http://logo/o.png');
 
 // Empty inputs are safe.
 assert.deepEqual(buildShowsFromDbEpisodes([], [], 'pl1'), []);
+
+// fetchAllSeriesEpisodes pages past the per-call IPC cap — a category with
+// more episodes than one page must not silently drop shows.
+{
+  const all = Array.from({ length: 2500 }, (_, i) => ({ id: i }));
+  const calls = [];
+  const fetchPage = async (plid, cat, limit, offset) => {
+    calls.push([plid, cat, limit, offset]);
+    return all.slice(offset, offset + limit);
+  };
+  const rows = await fetchAllSeriesEpisodes(fetchPage, 'pl1', 'Series', 1000);
+  assert.equal(rows.length, 2500);
+  assert.deepEqual(rows.map((r) => r.id).slice(0, 3), [0, 1, 2]);
+  assert.equal(rows[2499].id, 2499);
+  assert.deepEqual(calls, [
+    ['pl1', 'Series', 1000, 0],
+    ['pl1', 'Series', 1000, 1000],
+    ['pl1', 'Series', 1000, 2000],
+  ]);
+
+  // A single short page stops after one call.
+  const one = await fetchAllSeriesEpisodes(async () => [{ id: 'a' }], 'pl1', 'Series', 1000);
+  assert.equal(one.length, 1);
+
+  // A null page (failed IPC) is safe and returns what was collected.
+  const none = await fetchAllSeriesEpisodes(async () => null, 'pl1', 'Series', 1000);
+  assert.deepEqual(none, []);
+}
 
 console.log('OK: db-series-adapter');

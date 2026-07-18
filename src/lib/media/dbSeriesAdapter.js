@@ -55,3 +55,27 @@ export function buildShowsFromDbEpisodes(seriesRows, episodeRows, playlistId) {
 
   return [...shows.values()].sort((a, b) => a.show.localeCompare(b.show));
 }
+
+/**
+ * Pages through the per-call-capped `db:getSeriesEpisodesByCategory` IPC until
+ * a short page, so a category with more episodes than one page doesn't
+ * silently drop shows (mirrors the channels adapter's paging loop).
+ *
+ * @param {Function} fetchPage   (playlistId, category, limit, offset) => rows
+ * @param {string} playlistId
+ * @param {string} category
+ * @param {number} [pageSize]
+ * @returns {Promise<Array<Object>>} All episode rows for the category
+ */
+export async function fetchAllSeriesEpisodes(fetchPage, playlistId, category, pageSize = 1000) {
+  const episodes = [];
+  // Hard ceiling guards against a misbehaving IPC that keeps returning
+  // full pages forever.
+  const MAX_PAGES = 10000;
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const rows = (await fetchPage(playlistId, category, pageSize, page * pageSize)) || [];
+    episodes.push(...rows);
+    if (rows.length < pageSize) break;
+  }
+  return episodes;
+}

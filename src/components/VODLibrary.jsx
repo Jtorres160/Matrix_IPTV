@@ -7,7 +7,8 @@ import ResumeRail from './tv/ResumeRail.jsx';
 import { useAppStore } from '../store/appStore.js';
 import { playMediaItem } from '../lib/media/mediaResolver.js';
 import { groupSeries } from '../lib/media/seriesGrouping.js';
-import { buildShowsFromDbEpisodes } from '../lib/media/dbSeriesAdapter.js';
+import { buildShowsFromDbEpisodes, fetchAllSeriesEpisodes } from '../lib/media/dbSeriesAdapter.js';
+import { toPlayableVodItem } from '../lib/media/playableItem.js';
 
 const ROW_HEIGHT = 280;
 const POSTER_WIDTH = 160;
@@ -75,7 +76,7 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
               ? await window.electronDB.getVODsByCategory(activePlaylistId, cat, 50, 0)
               : await window.electronDB.getSeriesByCategory(activePlaylistId, cat, 50, 0)) || [];
             if (!isMovies && typeof window.electronDB.getSeriesEpisodesByCategory === 'function') {
-              const episodes = (await window.electronDB.getSeriesEpisodesByCategory(activePlaylistId, cat, 5000, 0)) || [];
+              const episodes = await fetchAllSeriesEpisodes(window.electronDB.getSeriesEpisodesByCategory, activePlaylistId, cat);
               dbSeriesEntries[cat] = { rows: items, episodes };
             }
           } catch (e) {
@@ -83,12 +84,18 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
           }
         }
         if (storeGroups[cat]) {
-          // DB rows win; drop store items whose stream URL the DB already has.
+          // Movies: DB rows win — drop store items whose stream URL the DB
+          // already has. Series rows carry no stream_url, so their store
+          // overlap is deduped later in groupedCategoryData (coveredKeys /
+          // dbEpUrls), not here.
           const dbUrls = new Set(items.map((i) => i.stream_url).filter(Boolean));
-          items = [...items, ...storeGroups[cat].filter((it) => {
-            const u = it.streamUrl || it.url || it.stream_url;
-            return !u || !dbUrls.has(u);
-          })];
+          const storeAdds = isMovies
+            ? storeGroups[cat].filter((it) => {
+                const u = it.streamUrl || it.url || it.stream_url;
+                return !u || !dbUrls.has(u);
+              })
+            : storeGroups[cat];
+          items = [...items, ...storeAdds];
         }
         return [cat, items];
       }));
@@ -141,7 +148,7 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
           ? await window.electronDB.getVODsByCategory(activePlaylistId, category, 50, 0)
           : await window.electronDB.getSeriesByCategory(activePlaylistId, category, 50, 0)) || [];
         if (!isMovies && typeof window.electronDB.getSeriesEpisodesByCategory === 'function') {
-          const episodes = (await window.electronDB.getSeriesEpisodesByCategory(activePlaylistId, category, 5000, 0)) || [];
+          const episodes = await fetchAllSeriesEpisodes(window.electronDB.getSeriesEpisodesByCategory, activePlaylistId, category);
           setSeriesDbData((prev) => ({ ...prev, [category]: { rows: items, episodes } }));
         }
       } catch (e) {
@@ -149,10 +156,13 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
       }
     }
 
+    // Same dedupe rule as loadCategories above: URL dedupe applies to movies
+    // only; series store overlap is handled in groupedCategoryData.
     const storeItems = isMovies ? media.movies : media.series;
     const dbUrls = new Set(items.map((i) => i.stream_url).filter(Boolean));
     const storeMatches = storeItems.filter((item) => {
       if ((item.group || 'Uncategorized') !== category) return false;
+      if (!isMovies) return true;
       const u = item.streamUrl || item.url || item.stream_url;
       return !u || !dbUrls.has(u);
     });
@@ -236,11 +246,10 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
           onPlay={(resolvedUrl) => {
             const item = selectedVOD;
             setSelectedVOD(null);
-            // DB vod_streams rows carry stream_url (no url/type) — the store
-            // MediaItems they replaced carried both. Normalize here so the
-            // player always receives a playable MediaItem-shaped object.
-            const url = resolvedUrl || item.streamUrl || item.url || item.stream_url;
-            playMediaItem({ ...item, ...(url ? { url } : {}), type: item.type || 'movie' });
+            // DB vod_streams rows carry stream_url/stream_icon (no url/type/
+            // logo) — normalize so the player and Now-Playing overlay always
+            // receive a playable MediaItem-shaped object.
+            playMediaItem(toPlayableVodItem(item, resolvedUrl));
           }}
         />
       )}

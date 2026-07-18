@@ -44,8 +44,11 @@ export function classifyMedia(row) {
   // A season/episode marker (S01E01, s1e1, or 1x01) in the name or URL.
   // Tolerant of the 1- or 2-digit variants providers use.
   const episodePattern = /\bs\d{1,2}\s?e\d{1,2}\b|\b\d{1,2}x\d{2}\b/;
-  // Spelled-out episode pattern: "Show Name Season 1 Episode 2"
-  const spelledOutPattern = /season\s+\d{1,2}\s+(?:episode|ep\.?)\s+\d{1,3}/i;
+  // Spelled-out episode pattern: "Show Name Season 1 Episode 2". Separators
+  // mirror seriesGrouping's SPELLED_RE ([\s._-]) so the classifier and the
+  // grouper agree on dotted/underscored file names like
+  // "The.Office.Season.2.Episode.3.mp4".
+  const spelledOutPattern = /season[\s._-]+\d{1,2}[\s._-]+(?:episode|ep\.?)[\s._-]*\d{1,3}/i;
 
   // 2. Series is the STRONGEST content signal and must be checked before the
   //    movie-extension heuristic. Xtream series episodes are delivered as

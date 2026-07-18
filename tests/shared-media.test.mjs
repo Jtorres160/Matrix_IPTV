@@ -13,6 +13,15 @@ assert.equal(shimParse, parseEpisode, 'shim must re-export the identical functio
 
 assert.deepEqual(parseEpisode('Breaking Bad S01E02 Cat in the Bag'), { show: 'Breaking Bad', season: 1, episode: 2, epTitle: 'Cat in the Bag' });
 
+// Spelled-out episode markers with dot/underscore separators (common in real
+// M3U file names) must classify as series, not fall through to the movie
+// extension heuristic — and must stay in lockstep with seriesGrouping's
+// SPELLED_RE so classifier and grouper agree on the same rows.
+assert.equal(classifyMedia({ name: 'The.Office.Season.2.Episode.3.mp4', stream_url: 'http://x/files/8821.mp4' }).type, 'series');
+assert.equal(classifyMedia({ name: 'Show_Name_Season_1_Ep_2.mkv', stream_url: 'http://x/files/8822.mkv' }).type, 'series');
+assert.equal(classifyMedia({ name: 'Dark-Season-3-Episode-8.avi', stream_url: 'http://x/files/8823.avi' }).type, 'series');
+assert.equal(parseEpisode('The.Office.Season.2.Episode.3').show, 'The Office');
+
 assert.match(contentHash('abc'), /^[0-9a-f]{8}$/);
 assert.equal(contentHash('abc'), contentHash('abc'), 'hash must be deterministic');
 assert.notEqual(contentHash('abc'), contentHash('abd'));
