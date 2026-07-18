@@ -287,8 +287,13 @@ export default function App() {
 
              // ── Phase 2.1: read-only parity diagnostics (observational) ──
              if (DB_CHANNEL_PARITY) {
+               // Compare against the store's live+unsorted set (appStore
+               // `channels` alias), not the full M3U parse: the SQLite
+               // `channels` table now excludes VOD/series rows, so comparing
+               // against result.channels would always false-flag countsMatch=NO.
+               const parityChannels = useAppStore.getState().channels;
                runChannelParityCheck({
-                 rendererChannels: result.channels,
+                 rendererChannels: parityChannels,
                  playlistId: playlist.id,
                }).catch(() => {});
              }
