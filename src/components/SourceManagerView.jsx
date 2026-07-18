@@ -112,12 +112,16 @@ function M3uUrlManager() {
   
   const addM3uPlaylist = useProfilesStore((s) => s.addM3uPlaylist);
   const isPro = useEntitlementsStore((s) => s.isPro());
+  const hydrated = useEntitlementsStore((s) => s.hydrated);
   const activeProfile = useActiveProfile();
   const [upsellOpen, setUpsellOpen] = useState(false);
 
   const handleAdd = async () => {
     if (!url) return;
-    if (!isPro && (activeProfile?.playlists || []).length >= 1) {
+    // Before hydration we don't yet know the real tier — let the add through
+    // rather than falsely upselling a Pro user; enforcement re-applies on the
+    // very next attempt once hydrated settles.
+    if (hydrated && !isPro && (activeProfile?.playlists || []).length >= 1) {
       setUpsellOpen(true);
       return;
     }
@@ -625,13 +629,17 @@ function XtreamManager() {
   const addM3uPlaylist = useProfilesStore((s) => s.addM3uPlaylist);
   const activeProfile = useActiveProfile();
   const isPro = useEntitlementsStore((s) => s.isPro());
+  const hydrated = useEntitlementsStore((s) => s.hydrated);
   const [upsellOpen, setUpsellOpen] = useState(false);
   const xtreamPlaylists = (activeProfile?.playlists || []).filter((p) => p.sourceKind === 'xtream' && p.serverUrl);
   const canSubmit = server.trim() && username.trim() && password.trim() && !isProcessing;
 
   const handleAdd = async () => {
     if (!canSubmit) return;
-    if (!isPro && (activeProfile?.playlists || []).length >= 1) {
+    // Before hydration we don't yet know the real tier — let the add through
+    // rather than falsely upselling a Pro user; enforcement re-applies on the
+    // very next attempt once hydrated settles.
+    if (hydrated && !isPro && (activeProfile?.playlists || []).length >= 1) {
       setUpsellOpen(true);
       return;
     }

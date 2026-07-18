@@ -48,6 +48,12 @@ export default function PlayerControls() {
   const [tracks, setTracks] = useState({ audio: [], subtitles: [], hasHls: false });
   const [isRecording, setIsRecording] = useState(false);
   const isPro = useEntitlementsStore((s) => s.isPro());
+  const hydrated = useEntitlementsStore((s) => s.hydrated);
+  // While entitlements haven't hydrated yet, don't render the locked variant —
+  // a paying user's Record button shouldn't flash a lock icon on launch. The
+  // actual enforcement lives in toggleRecord's `if (!isPro) return` below,
+  // which stays intact regardless of what the icon shows for a moment.
+  const showLocked = hydrated && !isPro;
   const [upsellOpen, setUpsellOpen] = useState(false);
 
   const openTracks = () => {
@@ -193,18 +199,18 @@ export default function PlayerControls() {
             {canRecord && (
               <button
                 onClick={toggleRecord}
-                title={isPro ? (isRecording ? 'Stop recording' : 'Record') : 'Matrix Pro required'}
+                title={showLocked ? 'Matrix Pro required' : (isRecording ? 'Stop recording' : 'Record')}
                 className={`flex items-center gap-2 transition-colors focus:outline-none ${
                   isRecording ? 'text-red-500' : 'text-white hover:text-red-400'
                 }`}
               >
-                {!isPro
+                {showLocked
                   ? <LucideLock size={18} className="text-amber-400" />
                   : isRecording
                     ? <LucideSquare size={20} className="fill-red-500" />
                     : <LucideCircle size={22} className="fill-red-500 text-red-500" />}
                 <span className="text-xs font-semibold uppercase tracking-wide">
-                  {isPro ? (isRecording ? 'Recording' : 'Rec') : 'Rec'}
+                  {showLocked ? 'Rec' : (isRecording ? 'Recording' : 'Rec')}
                 </span>
               </button>
             )}

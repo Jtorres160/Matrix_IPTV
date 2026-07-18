@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import RecordingLibrary from './RecordingLibrary.jsx';
 import RecordingDashboard from './RecordingDashboard.jsx';
 import ScheduledList from './ScheduledList.jsx';
@@ -15,7 +15,19 @@ const SEGMENTS = [
 export default function RecordingsView() {
   const [segment, setSegment] = useState('library');
   const isPro = useEntitlementsStore((s) => s.isPro());
-  const [upsellOpen, setUpsellOpen] = useState(!isPro);
+  const hydrated = useEntitlementsStore((s) => s.hydrated);
+  const [upsellOpen, setUpsellOpen] = useState(false);
+
+  // Only auto-open the upsell once we've confirmed (post-hydration) the user
+  // is actually free — otherwise a Pro user gets greeted by this modal
+  // during the brief pre-hydration window where isPro() still reads false.
+  useEffect(() => {
+    if (hydrated && !isPro) setUpsellOpen(true);
+  }, [hydrated, isPro]);
+
+  // Before the first refresh() resolves we don't yet know the real tier —
+  // render nothing rather than assuming free and flashing the locked screen.
+  if (!hydrated) return null;
 
   if (!isPro) {
     return (
