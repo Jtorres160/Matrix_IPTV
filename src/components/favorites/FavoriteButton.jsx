@@ -1,6 +1,6 @@
 import React from 'react';
 import { LucideHeart } from 'lucide-react';
-import { useProfilesStore } from '../../profileStore.js';
+import { useProfilesStore } from '../../store/profileStore';
 
 export default function FavoriteButton({ channelId, isFavorite }) {
   const toggleFavorite = useProfilesStore(s => s.toggleFavorite);

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { usePlayerStore } from '../player/playerStore.js';
-import { useProfilesStore } from '../store/profileStore.ts';
+import { useProfilesStore } from '../store/profileStore';
 import { analytics, tvEvents } from '../lib/tv/tvAnalytics.js';
 
 export function useWatchSession() {

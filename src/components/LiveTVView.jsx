@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppStore } from '../store/appStore.js';
-import { useActiveProfile, useProfilesStore } from '../profileStore.js';
+import { useActiveProfile, useProfilesStore, useActiveSettings } from '../store/profileStore';
 import { LucideSearch, LucideHeart, LucidePlayCircle, LucideTv, LucideImageOff, LucideListVideo } from 'lucide-react';
 import { usePlayerStore } from '../player/playerStore.js';
 import FavoritesRail from './favorites/FavoritesRail.jsx';
@@ -14,6 +14,8 @@ import { TV_CATEGORIES, getChannelsByCategory } from '../lib/tv/channelCategorie
 import { useChannelInput } from '../hooks/useChannelInput.js';
 import { useWatchSession } from '../hooks/useWatchSession.js';
 import { useTVBackNavigation } from '../hooks/useTVBackNavigation.js';
+import { resolveMediaItem, playMediaItem } from '../lib/media/mediaResolver.js';
+import { getNowNext, formatTime, programProgress } from '../lib/epg/epgTime.js';
 
 export default function LiveTVView({ isActive = true }) {
   useEffect(() => {
@@ -36,6 +38,7 @@ export default function LiveTVView({ isActive = true }) {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   
   const activeProfile = useActiveProfile();
+  const activeSettings = useActiveSettings();
   const toggleFavorite = useProfilesStore((s) => s.toggleFavorite);
   const addRecentlyWatched = useProfilesStore((s) => s.addRecentlyWatched);
   
@@ -58,8 +61,17 @@ export default function LiveTVView({ isActive = true }) {
     onGuideOpen: () => setIsGuideOpen(true)
   });
 
-  // Channel number entry and switching
-  useChannelInput(isActive && !isGuideOpen && !isLoadingPlaylist && channels.length > 0);
+  // Channel number entry and switching. `channelNumber` is the digits the
+  // user has typed so far — shown as an on-screen display below.
+  const { channelNumber } = useChannelInput(isActive && !isGuideOpen && !isLoadingPlaylist && channels.length > 0);
+
+  // Channel numbers match the 0-9 zapping semantics: position in the full
+  // channel list (playlist[index]), 1-based.
+  const channelNumbers = useMemo(() => {
+    const m = new Map();
+    channels.forEach((c, i) => m.set(c.id, i + 1));
+    return m;
+  }, [channels]);
   
   // Session tracking
   useWatchSession();
@@ -74,13 +86,13 @@ export default function LiveTVView({ isActive = true }) {
   const filteredChannels = useMemo(() => {
     let result = channels;
     if (activeCategory) {
-      result = result.filter(c => c.groups.includes(activeCategory));
+      result = result.filter(c => (c.groups || []).includes(activeCategory));
     }
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
-      result = result.filter(c => 
-        c.name.toLowerCase().includes(q) || 
-        c.groups.some(g => g.toLowerCase().includes(q))
+      result = result.filter(c =>
+        (c.name || '').toLowerCase().includes(q) ||
+        (c.groups || []).some(g => (g || '').toLowerCase().includes(q))
       );
     }
     return result;
@@ -90,13 +102,20 @@ export default function LiveTVView({ isActive = true }) {
     return epgData.get(tvgId) || [];
   };
 
+  // Only surface categories that actually contain live channels. The raw
+  // `categories` list from the parser also includes VOD/Series groups (which
+  // live under Movies/Series), and picking those here would filter the list to
+  // nothing. Derive from the live channel set, like the Channels browser does.
+  const liveCategories = useMemo(() => {
+    const present = new Set();
+    channels.forEach((c) => (c.groups || []).forEach((g) => present.add(g)));
+    const hidden = activeSettings?.hiddenCategories || [];
+    return categories.filter((c) => present.has(c) && !hidden.includes(c));
+  }, [channels, categories, activeSettings?.hiddenCategories]);
+
   const handlePlayChannel = (channel) => {
-    performance.mark("player-mode-enter");
-    performance.mark("channel-change-start");
-    setSelectedChannel(channel);
     addRecentlyWatched(channel.id);
-    setChannel(channel);
-    setCurrentView('player');
+    playMediaItem(channel);
   };
 
   // NEW RANKING AND INTELLIGENCE
@@ -118,18 +137,19 @@ export default function LiveTVView({ isActive = true }) {
   // Chronological recently watched for the old rail
   const chronologicalHistory = useMemo(() => {
     const historyToUse = watchHistory.length > 0 ? watchHistory : recentlyWatchedItems;
+    
     return [...historyToUse]
       .sort((a, b) => (b.lastWatchedAt || b.timestamp || 0) - (a.lastWatchedAt || a.timestamp || 0))
       .map(item => {
         const id = typeof item === 'string' ? item : (item.channelId || item.id);
         return {
-          channel: channels.find(c => c.id === id),
+          channel: resolveMediaItem(id),
           timestamp: item.lastWatchedAt || item.timestamp || Date.now(),
           watchDuration: item.totalWatchSeconds || item.watchDuration || 0
         };
       })
       .filter(x => x.channel);
-  }, [watchHistory, recentlyWatchedItems, channels]);
+  }, [watchHistory, recentlyWatchedItems]);
 
   // EMPTY STATES
   if (isLoadingPlaylist) {
@@ -165,7 +185,15 @@ export default function LiveTVView({ isActive = true }) {
 
   return (
     <div className="flex flex-col h-full w-full bg-transparent overflow-y-auto no-scrollbar relative z-10 scroll-smooth">
-      
+
+      {/* Channel number OSD — feedback while typing digits to zap */}
+      {channelNumber && (
+        <div className="fixed top-8 right-8 z-50 px-8 py-4 bg-black/85 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl pointer-events-none">
+          <div className="text-5xl font-black text-white tracking-[0.2em] tabular-nums">{channelNumber}</div>
+          <div className="text-xs text-gray-400 mt-1 text-center uppercase tracking-widest">Channel</div>
+        </div>
+      )}
+
       {/* ── LIVE TV HERO (TRANSPARENT HOLE) ── */}
       {/* Takes up most of the screen, allowing Layer 0 video to shine through */}
       <div className="w-full h-[60vh] flex flex-col justify-between p-12 bg-gradient-to-b from-black/80 via-transparent to-black pointer-events-none">
@@ -197,15 +225,7 @@ export default function LiveTVView({ isActive = true }) {
 
         {/* Bottom Hero Layer (Context for currently playing video) */}
         {activeChannel ? (
-           <div className="pointer-events-auto mb-8">
-              <span className="px-3 py-1 bg-red-600 text-white text-xs font-bold tracking-widest uppercase rounded shadow-sm mb-3 inline-block">Live</span>
-              <h1 className="text-6xl font-black text-white drop-shadow-2xl max-w-4xl tracking-tight mb-2">
-                {activeChannel.name}
-              </h1>
-              <p className="text-xl text-gray-300 drop-shadow-md font-medium">
-                {activeChannel.groups?.[0]}
-              </p>
-           </div>
+           <HeroNowPlaying channel={activeChannel} epgData={epgData} />
         ) : (
           <div className="pointer-events-auto mb-8">
             <h1 className="text-5xl font-black text-white drop-shadow-2xl tracking-tight mb-2">Live TV</h1>
@@ -284,22 +304,23 @@ export default function LiveTVView({ isActive = true }) {
         <div className="mt-8 flex-1 flex flex-col px-8">
           <h2 className="text-2xl font-bold text-white mb-4 tracking-tight">All Channels</h2>
           
-          <CategoryRibbon 
-            categories={categories} 
-            activeCategory={activeCategory} 
-            setActiveCategory={setActiveCategory} 
+          <CategoryRibbon
+            categories={liveCategories}
+            activeCategory={activeCategory}
+            setActiveCategory={setActiveCategory}
           />
           
           <div className="mt-6 flex-1 min-h-[500px]">
              {filteredChannels.length > 0 ? (
-               <VirtualizedChannelList 
-                 channels={filteredChannels} 
+               <VirtualizedChannelList
+                 channels={filteredChannels}
                  activeUrl={activeUrl}
                  onPlay={handlePlayChannel}
                  favorites={favorites}
                  onToggleFavorite={toggleFavorite}
                  getEpgForChannel={getEpgForChannel}
                  isActive={isActive}
+                 channelNumbers={channelNumbers}
                />
              ) : (
                <div className="flex flex-col items-center justify-center h-64 text-gray-500">
@@ -328,6 +349,46 @@ export default function LiveTVView({ isActive = true }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Components
 // ─────────────────────────────────────────────────────────────────────────────
+
+function HeroNowPlaying({ channel, epgData }) {
+  const programs = epgData.get(channel.tvgId) || [];
+  const { now, next } = getNowNext(programs);
+  const progress = programProgress(now);
+
+  return (
+    <div className="pointer-events-auto mb-8 max-w-4xl">
+      <span className="px-3 py-1 bg-red-600 text-white text-xs font-bold tracking-widest uppercase rounded shadow-sm mb-3 inline-block">Live</span>
+      <h1 className="text-6xl font-black text-white drop-shadow-2xl tracking-tight mb-2">
+        {channel.name}
+      </h1>
+      {now ? (
+        <div className="mt-2">
+          <p className="text-2xl text-white drop-shadow-md font-semibold">
+            {now.title}
+            <span className="text-gray-400 text-lg font-normal ml-3">
+              {formatTime(now.start)} – {formatTime(now.stop)}
+            </span>
+          </p>
+          {progress != null && (
+            <div className="w-96 max-w-full h-1 bg-white/20 rounded-full mt-3 overflow-hidden">
+              <div className="h-full bg-red-500 rounded-full" style={{ width: `${Math.round(progress * 100)}%` }} />
+            </div>
+          )}
+          {next && (
+            <p className="text-base text-gray-300 drop-shadow-md mt-3">
+              <span className="text-gray-500 uppercase text-xs font-bold tracking-wider mr-2">Next</span>
+              {next.title} · {formatTime(next.start)}
+            </p>
+          )}
+        </div>
+      ) : (
+        <p className="text-xl text-gray-300 drop-shadow-md font-medium">
+          {channel.groups?.[0]}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function CategoryRibbon({ categories, activeCategory, setActiveCategory }) {
   const containerRef = useRef(null);
@@ -367,7 +428,7 @@ function CategoryRibbon({ categories, activeCategory, setActiveCategory }) {
 }
 
 // Custom Virtualizer for full window scrolling compatibility
-function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onToggleFavorite, getEpgForChannel, isActive }) {
+function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onToggleFavorite, getEpgForChannel, isActive, channelNumbers }) {
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600); // Default assumption for the block
   const containerRef = useRef(null);
@@ -385,8 +446,9 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
       }
     };
     
-    // Listen to parent scroll container (the main div)
-    const parent = document.querySelector('.overflow-y-auto');
+    // Listen to our own scroll ancestor, not the first `.overflow-y-auto`
+    // in the document (that can be a different view's container).
+    const parent = containerRef.current?.closest('.overflow-y-auto');
     if (parent) {
       parent.addEventListener('scroll', handleScroll, { passive: true });
       return () => parent.removeEventListener('scroll', handleScroll);
@@ -407,7 +469,12 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
     const isPlaying = activeUrl === channel.url;
     const isFav = favorites.includes(channel.id);
     const epg = getEpgForChannel(channel.tvgId);
-    const currentProgram = epg[0]?.title || "Unknown Program";
+    const { now: nowProgram } = getNowNext(epg);
+    const progress = programProgress(nowProgram);
+    // Fall back to the channel's group — never a dead "Unknown Program"
+    const currentProgram = nowProgram
+      ? nowProgram.title
+      : (channel.groups?.[0] || '');
 
     visibleItems.push(
       <div 
@@ -424,6 +491,11 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
               : 'hover:bg-white/5 bg-white/5 border-l-4 border-transparent'
           }`}
         >
+          {/* Channel number — matches 0-9 zapping */}
+          <div className="shrink-0 w-12 mr-2 text-right text-sm font-mono text-gray-500 tabular-nums">
+            {channelNumbers?.get(channel.id) || ''}
+          </div>
+
           {/* Logo */}
           <div className="shrink-0 mr-4 w-12 h-12 rounded bg-black/40 flex items-center justify-center p-1">
              {channel.logo ? (
@@ -442,8 +514,14 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
               {isPlaying && <span className="flex shrink-0 w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>}
             </div>
             <p className="text-sm text-gray-400 truncate mt-0.5">
+              {nowProgram && <span className="text-blue-400 font-medium mr-2">{formatTime(nowProgram.start)}</span>}
               {currentProgram}
             </p>
+            {progress != null && (
+              <div className="w-40 h-0.5 bg-white/10 rounded-full mt-1.5 overflow-hidden">
+                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.round(progress * 100)}%` }} />
+              </div>
+            )}
           </div>
           
           {/* Actions */}

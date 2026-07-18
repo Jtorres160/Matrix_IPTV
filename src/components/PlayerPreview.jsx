@@ -4,7 +4,9 @@ import { usePlayerStore } from '../player/playerStore.js';
 import PlayerControls from './player/PlayerControls.jsx';
 import PlayerStatus from './player/PlayerStatus.jsx';
 import PlayerOverlay from './player/PlayerOverlay.jsx';
+import MpegtsPlayer from './player/MpegtsPlayer.jsx';
 import { useAppStore } from '../store/appStore.js';
+import { useResumeStore } from '../store/resumeStore.js';
 
 export default function PlayerPreview({ playerPreference }) {
   const containerRef = useRef(null);
@@ -30,7 +32,14 @@ export default function PlayerPreview({ playerPreference }) {
     setVolume,
     toggleTheater,
     previousChannel,
-    nextChannel
+    nextChannel,
+    videoFit,
+    setMediaHandles,
+    isVOD,
+    duration,
+    currentTime,
+    setDuration,
+    setCurrentTime
   } = usePlayerStore();
 
   const [vlcAvailable, setVlcAvailable] = useState(false);
@@ -126,6 +135,12 @@ export default function PlayerPreview({ playerPreference }) {
       // Ignore if no active channel (we shouldn't steal keys when idle)
       if (!activeChannel) return;
 
+      // Only handle shortcuts while the player is the visible layer.
+      // Without this, once a channel has played the handler hijacks
+      // arrows/space across every menu and list in the app.
+      const { currentView, isImmersivePlayer } = useAppStore.getState();
+      if (currentView !== 'player' && !isImmersivePlayer) return;
+
       switch (e.key.toLowerCase()) {
         case ' ':
           e.preventDefault();
@@ -161,20 +176,19 @@ export default function PlayerPreview({ playerPreference }) {
           break;
         case 'escape':
         case 'backspace':
+          // Exit-player handling lives in the App-level handler
+          // (supreme_layout). Here we only sync fullscreen state.
           if (isFullscreen) {
-            // Browser handles exiting native fullscreen, but we sync state
             setFullscreen(false);
-          } else {
-            // If windowed, go back to Live TV
-            const currentView = useAppStore.getState().currentView;
-            if (currentView === 'player') {
-              useAppStore.getState().setCurrentView('live-tv');
-            }
           }
           break;
         case 't':
           e.preventDefault();
           toggleTheater();
+          break;
+        case 'a':
+          e.preventDefault();
+          usePlayerStore.getState().cycleVideoFit();
           break;
         default:
           break;
@@ -225,6 +239,47 @@ export default function PlayerPreview({ playerPreference }) {
     };
   }, [activeUrl, activeChannel, playerPreference, handleError]);
 
+  // --- Continue Watching: resume, persist, and clear playback position ---
+
+  // Resume-seek: once per source, jump to the saved position (<95%).
+  const resumedForRef = useRef(null);
+  useEffect(() => {
+    if (!isVOD || !activeChannel || !activeUrl) return;
+    if (resumedForRef.current === activeUrl) return;
+    if (!duration || duration <= 0) return; // wait until we know the length
+    const entry = useResumeStore.getState().getPosition(activeChannel.id);
+    resumedForRef.current = activeUrl;
+    if (entry && entry.positionSec < 0.95 * duration) {
+      usePlayerStore.getState().seek(entry.positionSec);
+      try { playerRef.current?.seekTo?.(entry.positionSec, 'seconds'); } catch (e) { /* ignore */ }
+    }
+  }, [isVOD, activeChannel, activeUrl, duration]);
+
+  // Saver: throttle-persist position for on-demand content; clear at ≥95%.
+  const lastSaveRef = useRef(0);
+  useEffect(() => {
+    if (!isVOD || !activeChannel || !duration) return;
+    if (currentTime >= 0.95 * duration) {
+      useResumeStore.getState().clearPosition(activeChannel.id);
+      return;
+    }
+    const now = Date.now();
+    if (now - lastSaveRef.current >= 5000) {
+      lastSaveRef.current = now;
+      useResumeStore.getState().savePosition(activeChannel, currentTime, duration);
+    }
+  }, [isVOD, activeChannel, currentTime, duration]);
+
+  // Persist once more on unmount / source change (capture the last position).
+  const tailRef = useRef({ activeChannel, currentTime, duration, isVOD });
+  tailRef.current = { activeChannel, currentTime, duration, isVOD };
+  useEffect(() => () => {
+    const t = tailRef.current;
+    if (t.isVOD && t.activeChannel && t.duration && t.currentTime < 0.95 * t.duration) {
+      useResumeStore.getState().savePosition(t.activeChannel, t.currentTime, t.duration);
+    }
+  }, [activeUrl]);
+
   if (!activeChannel) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-sm bg-black w-full h-full relative z-0">
@@ -245,9 +300,9 @@ export default function PlayerPreview({ playerPreference }) {
 
   // --- ReactPlayer Implementation ---
   return (
-    <div 
+    <div
       ref={containerRef}
-      className={`relative bg-black z-0 transition-all duration-300 ${
+      className={`relative bg-black z-0 transition-all duration-300 fit-${videoFit} ${
         isFullscreen ? 'fixed inset-0 z-[9999]' : 'w-full h-full'
       } ${
         currentMode === 'theater' && !isFullscreen ? 'col-span-2' : ''
@@ -256,14 +311,23 @@ export default function PlayerPreview({ playerPreference }) {
       onMouseMove={showControlsTemporarily}
       onMouseLeave={() => setPlaybackState(playbackState)} // Trigger a re-eval of hide timer
     >
+      {/* Video sizing: how the picture fills the frame (aspect/zoom control). */}
+      <style>{`
+        .fit-contain video { object-fit: contain; }
+        .fit-cover video { object-fit: cover; }
+        .fit-fill video { object-fit: fill; }
+      `}</style>
+
       {/* UI Overlays */}
       <PlayerOverlay />
       <PlayerStatus />
       <PlayerControls />
 
-      {/* Video Engine */}
+      {/* Video Engine — mpegts.js for recordings (raw TS), ReactPlayer otherwise */}
       <div className="w-full h-full pointer-events-none">
-        {activeUrl ? (
+        {!activeUrl ? null : activeChannel?.isRecording ? (
+          <MpegtsPlayer />
+        ) : (
           <ReactPlayer
             ref={playerRef}
             url={activeUrl}
@@ -272,9 +336,18 @@ export default function PlayerPreview({ playerPreference }) {
             playing={playbackState === 'playing' || playbackState === 'buffering'}
             volume={volume}
             muted={muted}
+            progressInterval={1000}
+            onDuration={(d) => setDuration(d || 0)}
+            onProgress={({ playedSeconds }) => setCurrentTime(playedSeconds || 0)}
             onReady={() => {
               if (window.electronLog) window.electronLog.write('info', `[PlayerPreview] Video Ready / HLS Initialized for: ${activeUrl}`);
               console.log(`[PlayerPreview] Video Ready / HLS Initialized for: ${activeUrl}`);
+              // Publish handles so the track menu can enumerate/switch audio +
+              // subtitle tracks (hls.js instance or the raw <video> element).
+              setMediaHandles({
+                getInternalPlayer: (key) => { try { return playerRef.current?.getInternalPlayer(key); } catch { return null; } },
+                getVideo: () => containerRef.current?.querySelector('video') || null,
+              });
               setPlaybackState('playing');
               try { 
                 performance.measure("channel-change", "channel-change-start"); 
@@ -288,6 +361,14 @@ export default function PlayerPreview({ playerPreference }) {
             onPause={() => setPlaybackState('paused')}
             onBuffer={() => setPlaybackState('buffering')}
             onBufferEnd={() => setPlaybackState('playing')}
+            onEnded={() => {
+              // Series autoplay: roll to the next episode when one finishes.
+              // Live streams never fire onEnded, so this only affects VOD/series.
+              const advanced = usePlayerStore.getState().playNextInSeries();
+              const ch = usePlayerStore.getState().activeChannel;
+              if (ch) useResumeStore.getState().clearPosition(ch.id);
+              if (!advanced) setPlaybackState('paused');
+            }}
             onError={(e) => {
               if (window.electronLog) window.electronLog.write('error', 'VIDEO_ERROR (ReactPlayer)', e);
               handleError();
@@ -301,7 +382,7 @@ export default function PlayerPreview({ playerPreference }) {
               }
             }}
           />
-        ) : null}
+        )}
       </div>
     </div>
   );

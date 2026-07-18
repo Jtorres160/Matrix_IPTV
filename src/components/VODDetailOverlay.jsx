@@ -35,8 +35,8 @@ export default function VODDetailOverlay({ item, type, onClose, onPlay }) {
 
   // Fetch TMDB Metadata if API key exists
   useEffect(() => {
-    if (!tmdbApiKey) return;
-    
+    if (!tmdbApiKey || !item?.name) return;
+
     const fetchTMDB = async () => {
       try {
         const query = encodeURIComponent(item.name);
@@ -61,11 +61,20 @@ export default function VODDetailOverlay({ item, type, onClose, onPlay }) {
   }, [item.name, type, tmdbApiKey]);
 
   const handlePlayClick = async () => {
-    if (type === 'vod') {
+    // M3U-sourced MediaItems carry their own stream URL — play directly.
+    const directUrl = item.streamUrl || item.url || item.stream_url;
+    if (directUrl) {
+      onPlay(directUrl);
+      return;
+    }
+
+    if (type === 'vod' && window.electronDB) {
+      // Xtream DB rows: build the stream URL from the playlist credentials.
       const playlistId = useProfilesStore.getState().activePlaylistId;
       const playlist = await window.electronDB.getPlaylists(useProfilesStore.getState().getActiveProfile().id)
-        .then(res => res.find(p => p.id === playlistId));
-      
+        .then(res => res.find(p => p.id === playlistId))
+        .catch(() => null);
+
       if (playlist && playlist.server_url) {
         const base = playlist.server_url.replace(/\/+$/, '');
         const ext = item.container_extension || 'mp4';
@@ -79,7 +88,7 @@ export default function VODDetailOverlay({ item, type, onClose, onPlay }) {
     }
   };
 
-  const posterUrl = type === 'vod' ? item.stream_icon : item.cover;
+  const posterUrl = (type === 'vod' ? item.stream_icon : item.cover) || item.poster || item.logo || null;
   const description = metadata?.overview || item.plot || 'No description available.';
   const rating = metadata?.rating || item.rating || 0;
   const backdrop = metadata?.backdrop || posterUrl; // Fallback to poster

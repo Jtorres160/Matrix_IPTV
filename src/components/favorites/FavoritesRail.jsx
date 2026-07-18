@@ -1,11 +1,12 @@
 import React from 'react';
 import { LucideImageOff, LucidePlayCircle } from 'lucide-react';
 import FavoriteButton from './FavoriteButton.jsx';
+import { resolveMediaItem } from '../../lib/media/mediaResolver.js';
 
-export default function FavoritesRail({ channels, favorites, onPlay }) {
-  // Filter and map to actual channel objects
+export default function FavoritesRail({ favorites, onPlay }) {
+  // Filter and map to actual media objects (live, movie, series)
   const favoriteChannels = favorites
-    .map(id => channels.find(c => c.id === id))
+    .map(id => resolveMediaItem(id))
     .filter(Boolean);
 
   if (favoriteChannels.length === 0) {
