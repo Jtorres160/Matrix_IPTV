@@ -809,7 +809,13 @@ function insertSeriesEpisodesBatch(playlistId, episodes, chunkSize = 500) {
   for (let i = 0; i < episodes.length; i += chunkSize) {
     const chunk = episodes.slice(i, i + chunkSize);
     const txn = db.transaction((rows) => {
+      let skipped = 0;
       for (const ep of rows) {
+        // Skip episodes with missing/empty stream_url (NOT NULL column constraint)
+        if (!ep.stream_url) {
+          skipped++;
+          continue;
+        }
         stmts.insertSeriesEpisode.run({
           playlist_id: playlistId,
           series_key: ep.series_key,
@@ -822,9 +828,13 @@ function insertSeriesEpisodesBatch(playlistId, episodes, chunkSize = 500) {
           group_title: ep.group_title || null,
         });
       }
+      if (skipped > 0) {
+        console.warn(`[DB] Skipped ${skipped} series episodes with no stream_url.`);
+      }
+      return skipped;
     });
-    txn(chunk);
-    inserted += chunk.length;
+    const skipped = txn(chunk);
+    inserted += chunk.length - skipped;
   }
   return { inserted };
 }

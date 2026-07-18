@@ -30,6 +30,16 @@ assert.equal(byCat[0].stream_url, 'http://x/s1e1.mkv');
 // Stats
 assert.deepEqual(db.getMediaStats('pl1'), { vodCount: 2, seriesCount: 0, episodeCount: 3 });
 
+// Test skipping episodes with missing stream_url
+const skipResult = db.insertSeriesEpisodesBatch('pl1', [
+  { series_key: 'm3u-show-2', season: 1, episode: 1, name: 'Show 2 S01E01', title: 'Valid', stream_url: 'http://x/s2s1e1.mkv', group_title: 'Series' },
+  { series_key: 'm3u-show-2', season: 1, episode: 2, name: 'Show 2 S01E02', title: 'Missing URL', stream_url: '', group_title: 'Series' },
+]);
+assert.equal(skipResult.inserted, 1, 'Should insert only 1 of 2 episodes (1 has empty stream_url)');
+const show2Eps = db.getSeriesEpisodes('pl1', 'm3u-show-2');
+assert.equal(show2Eps.length, 1, 'Only 1 episode should be in database');
+assert.equal(show2Eps[0].name, 'Show 2 S01E01', 'Valid episode should be inserted');
+
 // Clear
 db.clearPlaylistSeriesEpisodes('pl1');
 assert.equal(db.getSeriesEpisodes('pl1', 'm3u-show-1').length, 0);
