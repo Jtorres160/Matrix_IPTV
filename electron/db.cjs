@@ -111,6 +111,7 @@ const SCHEMA_SQL = `
     rating REAL,
     added TEXT,
     container_extension TEXT,
+    stream_url TEXT,
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
   );
 
@@ -130,6 +131,26 @@ const SCHEMA_SQL = `
 
   CREATE INDEX IF NOT EXISTS idx_vod_playlist_category ON vod_streams(playlist_id, category_id);
   CREATE INDEX IF NOT EXISTS idx_series_playlist_category ON series(playlist_id, category_id);
+
+  -- ── Phase 11: M3U VOD/Series parity ──────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS series_episodes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    playlist_id TEXT NOT NULL,
+    series_key TEXT NOT NULL,
+    season INTEGER NOT NULL DEFAULT 1,
+    episode INTEGER NOT NULL DEFAULT 0,
+    name TEXT NOT NULL,
+    title TEXT,
+    stream_url TEXT NOT NULL,
+    logo TEXT,
+    group_title TEXT,
+    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_series_episodes_playlist_series
+    ON series_episodes(playlist_id, series_key);
+  CREATE INDEX IF NOT EXISTS idx_series_episodes_playlist_group
+    ON series_episodes(playlist_id, group_title);
 `;
 
 // ── Database Initialization ──────────────────────────────────────────────────
@@ -138,13 +159,16 @@ const SCHEMA_SQL = `
  * Opens (or creates) the SQLite database file and applies schema + PRAGMAs.
  * Must be called once during app.whenReady(), before any IPC handlers fire.
  *
+ * @param {string} [dbPathOverride] Optional explicit DB path (e.g. ':memory:').
+ *   When provided, used instead of `app.getPath('userData')` — enables
+ *   tests to run under `ELECTRON_RUN_AS_NODE=1` where `app` is undefined.
  * @returns {import('better-sqlite3').Database} The database instance
  */
-function initDatabase() {
+function initDatabase(dbPathOverride) {
   if (db) return db;
 
   const Database = require('better-sqlite3');
-  const dbPath = path.join(app.getPath('userData'), 'matrix_iptv.db');
+  const dbPath = dbPathOverride || path.join(app.getPath('userData'), 'matrix_iptv.db');
 
   console.log(`[DB] Opening SQLite database at: ${dbPath}`);
 
@@ -168,6 +192,10 @@ function initDatabase() {
 
   // ── Schema Creation ────────────────────────────────────────────────────
   db.exec(SCHEMA_SQL);
+
+  // ── Versioned Migrations (additive; existing rows untouched) ───────────
+  const { runMigrations } = require('./migrations.cjs');
+  runMigrations(db);
 
   // ── Prepare Hot-Path Statements ────────────────────────────────────────
   _prepareStatements();
