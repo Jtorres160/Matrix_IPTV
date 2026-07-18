@@ -61,7 +61,26 @@ export const DB_CHANNEL_PARITY = (() => {
   }
 })();
 
+/**
+ * When true, emits DB-vs-renderer VOD/Series parity diagnostics after an M3U
+ * sync (see src/lib/media/vodParity.js). Purely observational (log only).
+ * Defaults ON in dev, OFF in production; forceable with
+ * `VITE_DB_VOD_PARITY=true` / `=false`.
+ */
+export const DB_VOD_PARITY = (() => {
+  try {
+    const env = typeof import.meta !== 'undefined' ? import.meta.env : undefined;
+    if (!env) return false;
+    if (env.VITE_DB_VOD_PARITY === 'true') return true;
+    if (env.VITE_DB_VOD_PARITY === 'false') return false;
+    return Boolean(env.DEV); // default: on in dev only
+  } catch {
+    return false;
+  }
+})();
+
 export const featureFlags = {
   USE_DB_CHANNELS,
   DB_CHANNEL_PARITY,
+  DB_VOD_PARITY,
 };

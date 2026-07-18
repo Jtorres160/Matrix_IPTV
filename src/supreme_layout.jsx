@@ -6,7 +6,8 @@ import { loadPlaylist as fetchPlaylist } from "./lib/m3u/playlistService.js";
 import { getPlaylistFromCache, savePlaylistToCache } from "./lib/m3u/playlistCache.js";
 import { runChannelParityCheck, loadDbChannels } from "./lib/tv/dbChannelAdapter.js";
 import { runIdentityBridgeDiagnostics } from "./lib/tv/identityBridge.js";
-import { DB_CHANNEL_PARITY, USE_DB_CHANNELS } from "./config/featureFlags.js";
+import { DB_CHANNEL_PARITY, USE_DB_CHANNELS, DB_VOD_PARITY } from "./config/featureFlags.js";
+import { runVodParityCheck } from "./lib/media/vodParity.js";
 import { toMediaItem } from "./lib/media/mediaAdapter.js";
 
 import { usePlayerStore } from "./player/playerStore.js";
@@ -290,6 +291,11 @@ export default function App() {
                  rendererChannels: result.channels,
                  playlistId: playlist.id,
                }).catch(() => {});
+             }
+
+             // ── VOD/Series parity diagnostics (observational) ────────────
+             if (DB_VOD_PARITY) {
+               runVodParityCheck({ playlistId: playlist.id }).catch(() => {});
              }
 
              // ── Phase 2.3: identity bridge diagnostics (observational) ───
