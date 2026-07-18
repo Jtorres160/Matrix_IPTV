@@ -10,6 +10,10 @@
 // and any trailing episode title.
 const EP_RE = /^(.*?)[\s._\-]*(?:[Ss](\d{1,2})[\s._\-]*[Ee](\d{1,2})|(\d{1,2})x(\d{2}))(.*)$/;
 
+// Spelled-out fallback for providers that don't use SxxExx/NxNN at all, e.g.
+// "Show Name Season 1 Episode 2" or "Show Name Season 01 Ep 3 - Title".
+const SPELLED_RE = /^(.*?)[\s._\-]*season[\s._\-]*(\d{1,2})[\s._\-]*(?:episode|ep\.?)[\s._\-]*(\d{1,3})(.*)$/i;
+
 function cleanTitle(s) {
   return (s || '')
     .replace(/[._]+/g, ' ')
@@ -25,17 +29,37 @@ function cleanTitle(s) {
  */
 export function parseEpisode(rawName) {
   if (!rawName) return null;
-  const m = EP_RE.exec(String(rawName).trim());
-  if (!m) return null;
-  const season = parseInt(m[2] != null ? m[2] : m[4], 10);
-  const episode = parseInt(m[3] != null ? m[3] : m[5], 10);
-  if (Number.isNaN(season) || Number.isNaN(episode)) return null;
-  return {
-    show: cleanTitle(m[1]) || 'Unknown Show',
-    season,
-    episode,
-    epTitle: cleanTitle(m[6]) || '',
-  };
+  const str = String(rawName).trim();
+
+  const m = EP_RE.exec(str);
+  if (m) {
+    const season = parseInt(m[2] != null ? m[2] : m[4], 10);
+    const episode = parseInt(m[3] != null ? m[3] : m[5], 10);
+    if (!Number.isNaN(season) && !Number.isNaN(episode)) {
+      return {
+        show: cleanTitle(m[1]) || 'Unknown Show',
+        season,
+        episode,
+        epTitle: cleanTitle(m[6]) || '',
+      };
+    }
+  }
+
+  const m2 = SPELLED_RE.exec(str);
+  if (m2) {
+    const season = parseInt(m2[2], 10);
+    const episode = parseInt(m2[3], 10);
+    if (!Number.isNaN(season) && !Number.isNaN(episode)) {
+      return {
+        show: cleanTitle(m2[1]) || 'Unknown Show',
+        season,
+        episode,
+        epTitle: cleanTitle(m2[4]) || '',
+      };
+    }
+  }
+
+  return null;
 }
 
 /**

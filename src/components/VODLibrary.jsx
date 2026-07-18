@@ -54,15 +54,16 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
       });
 
       const storeCats = Object.keys(storeGroups);
-      
+
       // Merge unique categories
       const mergedCats = [...new Set([...dbCats, ...storeCats])];
       setCategories(mergedCats);
-      
-      // Eagerly load the first few categories
-      const initialData = {};
-      for (let i = 0; i < Math.min(mergedCats.length, 5); i++) {
-        const cat = mergedCats[i];
+
+      // Eagerly load the first few categories — in parallel, not one DB
+      // round-trip at a time (this was a serial await-in-a-loop that added up
+      // to 5x the latency of a single category fetch).
+      const initialCats = mergedCats.slice(0, 5);
+      const entries = await Promise.all(initialCats.map(async (cat) => {
         let items = [];
         if (dbCats.includes(cat) && window.electronDB) {
           try {
@@ -76,12 +77,25 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
         if (storeGroups[cat]) {
           items = [...items, ...storeGroups[cat]];
         }
-        initialData[cat] = items;
-      }
-      setCategoryData(initialData);
+        return [cat, items];
+      }));
+      setCategoryData(Object.fromEntries(entries));
     };
     loadCategories();
   }, [activePlaylistId, isMovies, media]);
+
+  // Series episodes are regrouped into shows only when the underlying data
+  // changes, not on every render — groupSeries used to run inline in the
+  // render loop, including on every raw scroll event, which is what made the
+  // Series tab feel slow while scrolling/browsing.
+  const groupedCategoryData = useMemo(() => {
+    if (isMovies) return categoryData;
+    const out = {};
+    for (const [cat, items] of Object.entries(categoryData)) {
+      out[cat] = groupSeries(items);
+    }
+    return out;
+  }, [categoryData, isMovies]);
 
   // Load category data dynamically as user scrolls down
   const loadCategory = useCallback(async (category) => {
@@ -109,9 +123,20 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
     setCategoryData(prev => ({ ...prev, [category]: items }));
   }, [activePlaylistId, isMovies, categoryData, media]);
 
-  // Handle scrolling and focus
+  // Handle scrolling and focus — throttled to one state update per animation
+  // frame instead of one per native scroll event, which on its own was
+  // forcing a full re-render (and, before the groupedCategoryData memo above,
+  // a full re-group of every series category) on every scroll tick.
+  const latestScrollTop = useRef(0);
+  const scrollRafScheduled = useRef(false);
   const handleScroll = useCallback((e) => {
-    setScrollTop(e.target.scrollTop);
+    latestScrollTop.current = e.target.scrollTop;
+    if (scrollRafScheduled.current) return;
+    scrollRafScheduled.current = true;
+    requestAnimationFrame(() => {
+      setScrollTop(latestScrollTop.current);
+      scrollRafScheduled.current = false;
+    });
   }, []);
 
   useEffect(() => {
@@ -226,10 +251,9 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
           )}
 
           {visibleCategories.map(({ name, actualIndex }) => {
-            const rawItems = categoryData[name] || [];
-            // Series arrive as flat episodes; collapse them into one card per
-            // show. Movies render one card per title as-is.
-            const cards = isMovies ? rawItems : groupSeries(rawItems);
+            // Movies render one card per title; series were already grouped
+            // into shows by the groupedCategoryData memo above.
+            const cards = groupedCategoryData[name] || [];
 
             return (
               <div key={name} style={{ gridRow: actualIndex + 1, gridColumn: 1, padding: '0 0 0 40px' }}>

@@ -5,9 +5,13 @@
  * 'live', 'movie', or 'series'.
  */
 
-const MOVIE_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv'];
-const MOVIE_GROUPS = ['movies', 'vod', 'cinema', 'netflix', '4k movies', 'film'];
-const SERIES_GROUPS = ['series', 'tv shows', 'shows', 'season'];
+const MOVIE_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.m4v'];
+// Stems, not whole words: 'movie' matches both "Movie" and "Movies"; 'serie'
+// matches both "Serie" (Spanish/French singular) and "Series". Generic
+// (non-Xtream) M3U providers use a wide variety of category naming, so this
+// list is deliberately broader than Xtream's own conventions.
+const MOVIE_GROUPS = ['movie', 'vod', 'cinema', 'netflix', 'film', 'pelicula', 'filme', 'on demand', 'ppv', 'blockbuster', 'cine'];
+const SERIES_GROUPS = ['serie', 'tv show', 'shows', 'season', 'dizi', 'temporada'];
 
 /**
  * Normalizes strings for robust matching.
@@ -37,9 +41,9 @@ export function classifyMedia(row) {
   const url = normalize(row.stream_url || row.url || '');
   const name = normalize(row.name || row.title || '');
 
-  // A season/episode marker (S01E01, s1e1) in the name or URL. Tolerant of the
-  // 1- or 2-digit variants providers use.
-  const episodePattern = /\bs\d{1,2}\s?e\d{1,2}\b/;
+  // A season/episode marker (S01E01, s1e1, or 1x01) in the name or URL.
+  // Tolerant of the 1- or 2-digit variants providers use.
+  const episodePattern = /\bs\d{1,2}\s?e\d{1,2}\b|\b\d{1,2}x\d{2}\b/;
 
   // 2. Series is the STRONGEST content signal and must be checked before the
   //    movie-extension heuristic. Xtream series episodes are delivered as
@@ -52,12 +56,18 @@ export function classifyMedia(row) {
     return { type: 'series', confidence: 0.95 };
   }
 
-  // 3. Movie by video-file extension (now that series files are excluded).
+  // 3. Movie by URL path convention (mirrors the /series/ check above — many
+  //    resellers mimic Xtream's /movie/ path even on a plain M3U export).
+  if (url.includes('/movie/') || url.includes('/vod/')) {
+    return { type: 'movie', confidence: 0.9 };
+  }
+
+  // 4. Movie by video-file extension (now that series files are excluded).
   if (MOVIE_EXTENSIONS.some(ext => url.includes(ext))) {
     return { type: 'movie', confidence: 0.95 };
   }
 
-  // 4. Check Group Title heuristics (Medium indicators). Series group beats
+  // 5. Check Group Title heuristics (Medium indicators). Series group beats
   //    movie group when both somehow match.
   if (SERIES_GROUPS.some(g => groupTitle.includes(g))) {
     if (url.includes('.m3u8') || url.includes('/live/')) {
@@ -73,7 +83,15 @@ export function classifyMedia(row) {
     return { type: 'movie', confidence: 0.8 };
   }
 
-  // 5. Default fallback to Live TV
+  // 6. Title carries a release year like "Inception (2010)" — a strong movie
+  //    signal on generic (non-Xtream) M3U exports whose group-titles don't
+  //    match any keyword above. Skipped for anything already looking live.
+  const yearPattern = /\((19|20)\d{2}\)\s*$/;
+  if (yearPattern.test(name) && !url.includes('.m3u8') && !url.includes('/live/')) {
+    return { type: 'movie', confidence: 0.7 };
+  }
+
+  // 7. Default fallback to Live TV
   // If it has .m3u8 or /live/ it's very likely live
   if (url.includes('.m3u8') || url.includes('/live/')) {
     return { type: 'live', confidence: 0.9 };
