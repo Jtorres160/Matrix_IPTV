@@ -7,6 +7,7 @@ import ResumeRail from './tv/ResumeRail.jsx';
 import { useAppStore } from '../store/appStore.js';
 import { playMediaItem } from '../lib/media/mediaResolver.js';
 import { groupSeries } from '../lib/media/seriesGrouping.js';
+import { buildShowsFromDbEpisodes } from '../lib/media/dbSeriesAdapter.js';
 
 const ROW_HEIGHT = 280;
 const POSTER_WIDTH = 160;
@@ -19,6 +20,8 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
   
   const [categories, setCategories] = useState([]);
   const [categoryData, setCategoryData] = useState({});
+  // Series-only: per-category DB payload { rows: series[], episodes: series_episodes[] }.
+  const [seriesDbData, setSeriesDbData] = useState({});
   const [selectedVOD, setSelectedVOD] = useState(null);
   const [selectedSeries, setSelectedSeries] = useState(null);
   
@@ -63,6 +66,7 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
       // round-trip at a time (this was a serial await-in-a-loop that added up
       // to 5x the latency of a single category fetch).
       const initialCats = mergedCats.slice(0, 5);
+      const dbSeriesEntries = {};
       const entries = await Promise.all(initialCats.map(async (cat) => {
         let items = [];
         if (dbCats.includes(cat) && window.electronDB) {
@@ -70,15 +74,25 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
             items = (isMovies
               ? await window.electronDB.getVODsByCategory(activePlaylistId, cat, 50, 0)
               : await window.electronDB.getSeriesByCategory(activePlaylistId, cat, 50, 0)) || [];
+            if (!isMovies && typeof window.electronDB.getSeriesEpisodesByCategory === 'function') {
+              const episodes = (await window.electronDB.getSeriesEpisodesByCategory(activePlaylistId, cat, 5000, 0)) || [];
+              dbSeriesEntries[cat] = { rows: items, episodes };
+            }
           } catch (e) {
             console.warn('[VODLibrary] DB item fetch failed (non-fatal):', e);
           }
         }
         if (storeGroups[cat]) {
-          items = [...items, ...storeGroups[cat]];
+          // DB rows win; drop store items whose stream URL the DB already has.
+          const dbUrls = new Set(items.map((i) => i.stream_url).filter(Boolean));
+          items = [...items, ...storeGroups[cat].filter((it) => {
+            const u = it.streamUrl || it.url || it.stream_url;
+            return !u || !dbUrls.has(u);
+          })];
         }
         return [cat, items];
       }));
+      setSeriesDbData(dbSeriesEntries);
       setCategoryData(Object.fromEntries(entries));
     };
     loadCategories();
@@ -92,30 +106,56 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
     if (isMovies) return categoryData;
     const out = {};
     for (const [cat, items] of Object.entries(categoryData)) {
-      out[cat] = groupSeries(items);
+      const dbData = seriesDbData[cat];
+      const dbEpisodes = (dbData && dbData.episodes) || [];
+
+      // M3U path: structured episode rows exist → build shows from the DB.
+      const dbShows = dbEpisodes.length > 0
+        ? buildShowsFromDbEpisodes(dbData.rows, dbEpisodes, activePlaylistId)
+        : [];
+
+      // Fallback (Xtream show rows without episodes + in-memory store items),
+      // minus anything the DB shows already cover.
+      const coveredKeys = new Set(dbEpisodes.map((e) => String(e.series_key)));
+      const dbEpUrls = new Set(dbEpisodes.map((e) => e.stream_url).filter(Boolean));
+      const fallbackItems = items.filter((it) => {
+        if (it.series_id != null && coveredKeys.has(String(it.series_id))) return false;
+        const u = it.streamUrl || it.url || it.stream_url;
+        return !u || !dbEpUrls.has(u);
+      });
+
+      out[cat] = [...dbShows, ...groupSeries(fallbackItems)]
+        .sort((a, b) => a.show.localeCompare(b.show));
     }
     return out;
-  }, [categoryData, isMovies]);
+  }, [categoryData, seriesDbData, isMovies, activePlaylistId]);
 
   // Load category data dynamically as user scrolls down
   const loadCategory = useCallback(async (category) => {
     if (categoryData[category]) return;
 
     let items = [];
-    // DB fetch
     if (activePlaylistId && window.electronDB) {
       try {
         items = (isMovies
           ? await window.electronDB.getVODsByCategory(activePlaylistId, category, 50, 0)
           : await window.electronDB.getSeriesByCategory(activePlaylistId, category, 50, 0)) || [];
+        if (!isMovies && typeof window.electronDB.getSeriesEpisodesByCategory === 'function') {
+          const episodes = (await window.electronDB.getSeriesEpisodesByCategory(activePlaylistId, category, 5000, 0)) || [];
+          setSeriesDbData((prev) => ({ ...prev, [category]: { rows: items, episodes } }));
+        }
       } catch (e) {
         // Might not exist in DB
       }
     }
 
-    // AppStore fetch
     const storeItems = isMovies ? media.movies : media.series;
-    const storeMatches = storeItems.filter(item => (item.group || 'Uncategorized') === category);
+    const dbUrls = new Set(items.map((i) => i.stream_url).filter(Boolean));
+    const storeMatches = storeItems.filter((item) => {
+      if ((item.group || 'Uncategorized') !== category) return false;
+      const u = item.streamUrl || item.url || item.stream_url;
+      return !u || !dbUrls.has(u);
+    });
     if (storeMatches.length > 0) {
       items = [...items, ...storeMatches];
     }
