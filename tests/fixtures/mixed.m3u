@@ -1,0 +1,15 @@
+#EXTM3U
+#EXTINF:-1 tvg-id="cnn.us" tvg-logo="http://logo/cnn.png" group-title="News",CNN
+http://fixture/live/user/pass/1.m3u8
+#EXTINF:-1 group-title="Sports",ESPN HD
+http://fixture/live/user/pass/2.ts
+#EXTINF:-1 tvg-logo="http://logo/inc.png" group-title="VOD Movies",Inception (2010)
+http://fixture/movie/user/pass/100.mkv
+#EXTINF:-1 group-title="General",Interstellar (2014)
+http://fixture/get/777
+#EXTINF:-1 tvg-logo="http://logo/bb.png" group-title="Series",Breaking Bad S01E01 Pilot
+http://fixture/series/user/pass/200.mkv
+#EXTINF:-1 group-title="Series",Breaking Bad 1x02
+http://fixture/series/user/pass/201.mkv
+#EXTINF:-1 group-title="TV Shows",The Office Season 2 Episode 3
+http://fixture/vids/office-s2e3.mp4

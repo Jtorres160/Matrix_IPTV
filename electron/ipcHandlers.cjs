@@ -14,7 +14,21 @@
 const { ipcMain } = require('electron');
 const http = require('http');
 const https = require('https');
+const path = require('path');
+const { pathToFileURL } = require('url');
 const db = require('./db.cjs');
+
+// Shared media modules are ESM (also consumed by the renderer via shims in
+// src/lib/media/). The CJS main process loads them once via dynamic import.
+let _sharedMediaPromise = null;
+function loadSharedMedia() {
+  if (!_sharedMediaPromise) {
+    _sharedMediaPromise = import(
+      pathToFileURL(path.join(__dirname, 'shared', 'm3uRouting.mjs')).href
+    );
+  }
+  return _sharedMediaPromise;
+}
 
 let _mainWindow = null;
 
@@ -209,13 +223,29 @@ async function syncM3UPlaylist(playlistId, url) {
       return { success: false, error: 'No channels found', channelCount: 0, epgCount: 0 };
     }
 
-    // Stage 3: Clear old channels for this playlist
-    sendProgress(playlistId, 'inserting', 40, `Inserting ${channels.length} channels...`);
-    db.clearPlaylistChannels(playlistId);
+    // Stage 3: Classify + route (same classifier the renderer uses)
+    const { routeM3UItems } = await loadSharedMedia();
+    const routed = routeM3UItems(channels);
+    sendProgress(
+      playlistId, 'inserting', 40,
+      `Inserting ${routed.liveChannels.length} channels, ${routed.vodRows.length} movies, ${routed.episodeRows.length} episodes...`
+    );
 
-    // Stage 4: Chunked insert
-    const { inserted } = db.insertChannelsBatch(playlistId, channels);
-    sendProgress(playlistId, 'inserting', 60, `Inserted ${inserted} channels.`);
+    // Stage 4: Clear + chunked insert per table (replace, never accumulate)
+    db.clearPlaylistChannels(playlistId);
+    const { inserted } = db.insertChannelsBatch(playlistId, routed.liveChannels);
+
+    db.clearPlaylistVODs(playlistId);
+    const insertedVOD = db.insertVODBatch(playlistId, routed.vodRows).inserted;
+
+    db.clearPlaylistSeries(playlistId);
+    const insertedSeries = db.insertSeriesBatch(playlistId, routed.seriesRows).inserted;
+
+    db.clearPlaylistSeriesEpisodes(playlistId);
+    const insertedEpisodes = db.insertSeriesEpisodesBatch(playlistId, routed.episodeRows).inserted;
+
+    sendProgress(playlistId, 'inserting', 60,
+      `Inserted ${inserted} channels, ${insertedVOD} movies, ${insertedSeries} series (${insertedEpisodes} episodes).`);
 
     // Update playlist last_updated timestamp
     const playlist = db.getPlaylistById(playlistId);
@@ -249,11 +279,15 @@ async function syncM3UPlaylist(playlistId, url) {
     }
 
     // Stage 6: Done
-    sendProgress(playlistId, 'done', 100, `Sync complete: ${inserted} channels, ${epgCount} EPG entries.`);
+    sendProgress(playlistId, 'done', 100,
+      `Sync complete: ${inserted} channels, ${insertedVOD} movies, ${insertedSeries} series, ${epgCount} EPG entries.`);
 
     return {
       success: true,
       channelCount: inserted,
+      vodCount: insertedVOD,
+      seriesCount: insertedSeries,
+      episodeCount: insertedEpisodes,
       epgCount,
       epgUrl: epgUrl || null,
     };
@@ -832,3 +866,7 @@ module.exports = {
   registerIPCHandlers,
   setMainWindow,
 };
+
+// Test-only surface: lets integration tests drive the sync pipeline under
+// ELECTRON_RUN_AS_NODE without an ipcMain. Not part of the runtime API.
+module.exports.__testables = { syncM3UPlaylist, parseM3UChannels };
