@@ -233,10 +233,14 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
           item={selectedVOD}
           type={isMovies ? 'vod' : 'series'}
           onClose={() => setSelectedVOD(null)}
-          onPlay={() => {
+          onPlay={(resolvedUrl) => {
             const item = selectedVOD;
             setSelectedVOD(null);
-            playMediaItem(item);
+            // DB vod_streams rows carry stream_url (no url/type) — the store
+            // MediaItems they replaced carried both. Normalize here so the
+            // player always receives a playable MediaItem-shaped object.
+            const url = resolvedUrl || item.streamUrl || item.url || item.stream_url;
+            playMediaItem({ ...item, ...(url ? { url } : {}), type: item.type || 'movie' });
           }}
         />
       )}
