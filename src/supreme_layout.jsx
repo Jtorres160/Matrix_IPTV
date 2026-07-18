@@ -19,6 +19,7 @@ import PlayerPreview from "./components/PlayerPreview.jsx";
 import SettingsDrawer from "./components/SettingsDrawer.jsx";
 import AutoplayResume from "./components/AutoplayResume.jsx";
 import CommandPalette from "./components/CommandPalette.jsx";
+import { useEntitlementsStore } from "./store/entitlementsStore.js";
 
 export default function App() {
   useMediaKeys();
@@ -37,6 +38,16 @@ export default function App() {
   // Modals and UI overlays
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+
+  // Entitlements only get (re-)verified via IPC when something calls
+  // refresh() -- previously only the Settings > License panel did that on
+  // mount. That left every gate (Record button, Recordings, source cap)
+  // reporting "free" on a fresh launch for an already-licensed Pro user,
+  // until they happened to open Settings > License. Hydrate once at app
+  // startup so a persisted license is honored immediately everywhere.
+  useEffect(() => {
+    useEntitlementsStore.getState().refresh();
+  }, []);
 
   // Global search: Ctrl/Cmd+K
   useEffect(() => {
