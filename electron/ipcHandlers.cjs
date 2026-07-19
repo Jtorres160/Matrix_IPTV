@@ -14,7 +14,31 @@
 const { ipcMain } = require('electron');
 const http = require('http');
 const https = require('https');
+const path = require('path');
+const { pathToFileURL } = require('url');
 const db = require('./db.cjs');
+
+// Shared media modules are ESM (also consumed by the renderer via shims in
+// src/lib/media/). The CJS main process loads them once via dynamic import.
+let _sharedMediaPromise = null;
+function loadSharedMedia() {
+  if (!_sharedMediaPromise) {
+    _sharedMediaPromise = import(
+      pathToFileURL(path.join(__dirname, 'shared', 'm3uRouting.mjs')).href
+    );
+  }
+  return _sharedMediaPromise;
+}
+
+let _multiListPromise = null;
+function loadMultiListProvider() {
+  if (!_multiListPromise) {
+    _multiListPromise = import(
+      pathToFileURL(path.join(__dirname, 'shared', 'multiListProvider.mjs')).href
+    );
+  }
+  return _multiListPromise;
+}
 
 let _mainWindow = null;
 
@@ -50,8 +74,10 @@ function parseM3UChannels(text) {
     const url = (lines[i + 1] || '').trim();
     if (!url || url.startsWith('#')) continue;
 
-    // Extract channel name (after the last comma)
-    const nameMatch = line.match(/,(.*)$/);
+    // Extract channel name: everything after the first comma PAST the last
+    // quoted attribute — a plain /,(.*)$/ splits inside attributes that
+    // contain commas (group-title="Genie, Make a Wish").
+    const nameMatch = line.match(/,([^"]*)$/);
     const name = nameMatch ? nameMatch[1].trim() : 'Channel';
 
     // Extract group-title
@@ -66,12 +92,17 @@ function parseM3UChannels(text) {
     const logoMatch = line.match(/tvg-logo="([^"]*)"/i);
     const logo = logoMatch ? logoMatch[1].trim() : null;
 
+    // Extract tvg-type (live / movies / tvshows) — authoritative for routing
+    const tvgTypeMatch = line.match(/tvg-type="([^"]*)"/i);
+    const tvgType = tvgTypeMatch ? tvgTypeMatch[1].trim() : null;
+
     channels.push({
       name,
       stream_url: url,
       group_title: group || null,
       tvg_id: tvgId || null,
       logo: logo || null,
+      tvg_type: tvgType || null,
       stream_id: null,
       category_id: null,
     });
@@ -194,28 +225,51 @@ function sendProgress(playlistId, stage, progress, message) {
  */
 async function syncM3UPlaylist(playlistId, url) {
   try {
-    // Stage 1: Fetch M3U
+    // Stage 1: Fetch M3U — a multi-list provider (live/movies/tvshows served
+    // as sibling URLs) expands to every list its account offers. Optional
+    // lists are best-effort: a live-only account simply 404s them.
     sendProgress(playlistId, 'fetching', 10, 'Downloading playlist...');
-    const text = await fetchText(url);
+    const { expandPlaylistUrls } = await loadMultiListProvider();
+    const sources = expandPlaylistUrls(url);
 
-    // Stage 2: Parse
-    sendProgress(playlistId, 'parsing', 30, 'Parsing channels...');
-    const channels = parseM3UChannels(text);
-    const lines = text.split(/\r?\n/);
-    const epgUrl = parseM3UHeaderForEPG(lines[0]);
+    let channels = [];
+    let epgUrl = null;
+    for (const src of sources) {
+      let text;
+      try {
+        text = await fetchText(src.url);
+      } catch (fetchErr) {
+        if (src.required) throw fetchErr;
+        console.warn(`[IPC] Optional ${src.kind} list unavailable (${src.url}): ${fetchErr.message}`);
+        continue;
+      }
+      // Stage 2: Parse (per list)
+      sendProgress(playlistId, 'parsing', 30, 'Parsing channels...');
+      channels = channels.concat(parseM3UChannels(text));
+      if (!epgUrl) epgUrl = parseM3UHeaderForEPG(text.split(/\r?\n/, 1)[0]);
+    }
 
     if (channels.length === 0) {
       sendProgress(playlistId, 'error', 100, 'No channels found in playlist.');
       return { success: false, error: 'No channels found', channelCount: 0, epgCount: 0 };
     }
 
-    // Stage 3: Clear old channels for this playlist
-    sendProgress(playlistId, 'inserting', 40, `Inserting ${channels.length} channels...`);
-    db.clearPlaylistChannels(playlistId);
+    // Stage 3: Classify + route (same classifier the renderer uses)
+    const { routeM3UItems } = await loadSharedMedia();
+    const routed = routeM3UItems(channels);
+    sendProgress(
+      playlistId, 'inserting', 40,
+      `Inserting ${routed.liveChannels.length} channels, ${routed.vodRows.length} movies, ${routed.episodeRows.length} episodes...`
+    );
 
-    // Stage 4: Chunked insert
-    const { inserted } = db.insertChannelsBatch(playlistId, channels);
-    sendProgress(playlistId, 'inserting', 60, `Inserted ${inserted} channels.`);
+    // Stage 4: Clear + chunked insert per table (replace, never accumulate).
+    // All four tables replace in one transaction so a mid-sync failure can't
+    // leave, e.g., channels updated but series stale.
+    const { inserted, insertedVOD, insertedSeries, insertedEpisodes } =
+      db.syncPlaylistMediaTables(playlistId, routed);
+
+    sendProgress(playlistId, 'inserting', 60,
+      `Inserted ${inserted} channels, ${insertedVOD} movies, ${insertedSeries} series (${insertedEpisodes} episodes).`);
 
     // Update playlist last_updated timestamp
     const playlist = db.getPlaylistById(playlistId);
@@ -249,11 +303,15 @@ async function syncM3UPlaylist(playlistId, url) {
     }
 
     // Stage 6: Done
-    sendProgress(playlistId, 'done', 100, `Sync complete: ${inserted} channels, ${epgCount} EPG entries.`);
+    sendProgress(playlistId, 'done', 100,
+      `Sync complete: ${inserted} channels, ${insertedVOD} movies, ${insertedSeries} series, ${epgCount} EPG entries.`);
 
     return {
       success: true,
       channelCount: inserted,
+      vodCount: insertedVOD,
+      seriesCount: insertedSeries,
+      episodeCount: insertedEpisodes,
       epgCount,
       epgUrl: epgUrl || null,
     };
@@ -740,6 +798,33 @@ function registerIPCHandlers(mainWindow) {
     }
   });
 
+  ipcMain.handle('db:getSeriesEpisodes', (_e, playlistId, seriesKey) => {
+    try {
+      return db.getSeriesEpisodes(playlistId, seriesKey);
+    } catch (err) {
+      console.error('[IPC] db:getSeriesEpisodes error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:getSeriesEpisodesByCategory', (_e, playlistId, groupTitle, limit = 5000, offset = 0) => {
+    try {
+      return db.getSeriesEpisodesByCategory(playlistId, groupTitle, limit, offset);
+    } catch (err) {
+      console.error('[IPC] db:getSeriesEpisodesByCategory error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:getMediaStats', (_e, playlistId) => {
+    try {
+      return db.getMediaStats(playlistId);
+    } catch (err) {
+      console.error('[IPC] db:getMediaStats error:', err);
+      return { vodCount: 0, seriesCount: 0, episodeCount: 0 };
+    }
+  });
+
   // ── EPG Queries ──────────────────────────────────────────────────────
 
   /**
@@ -805,3 +890,7 @@ module.exports = {
   registerIPCHandlers,
   setMainWindow,
 };
+
+// Test-only surface: lets integration tests drive the sync pipeline under
+// ELECTRON_RUN_AS_NODE without an ipcMain. Not part of the runtime API.
+module.exports.__testables = { syncM3UPlaylist, parseM3UChannels };

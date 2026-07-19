@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from 'react';
 import ProgramCard from './ProgramCard.jsx';
 import { LucideImageOff } from 'lucide-react';
 
-export default function EPGChannelRow({ channel, programs, onPlay }) {
+export default function EPGChannelRow({ channel, programs, onPlay, onSchedule }) {
   const scrollRef = useRef(null);
 
   // A basic component to display channel info + program ribbon
@@ -33,11 +33,12 @@ export default function EPGChannelRow({ channel, programs, onPlay }) {
       >
         {programs && programs.length > 0 ? (
           programs.map((prog, i) => (
-            <ProgramCard 
-              key={i} 
-              program={prog} 
-              isLive={i === 0} 
-              onClick={() => onPlay(channel)} 
+            <ProgramCard
+              key={i}
+              program={prog}
+              isLive={i === 0}
+              onClick={() => onPlay(channel)}
+              onSchedule={onSchedule ? (program) => onSchedule(program, channel) : undefined}
             />
           ))
         ) : (

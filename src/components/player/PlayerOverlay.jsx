@@ -61,7 +61,7 @@ export default function PlayerOverlay() {
         {/* Channel Metadata */}
         <div className="flex-1 pb-1">
           <div className="flex items-center gap-3 mb-2">
-            <span className="px-2.5 py-0.5 bg-blue-600 text-white text-xs font-bold tracking-widest uppercase rounded shadow-sm">
+            <span className="px-2.5 py-0.5 bg-[#E8B15A]/15 text-[#F0C27B] border border-[#E8B15A]/30 text-xs font-bold tracking-widest uppercase rounded">
               {safeGroup}
             </span>
             {(playbackState === 'buffering' || playbackState === 'idle') && (

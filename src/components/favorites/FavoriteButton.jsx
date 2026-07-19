@@ -1,6 +1,6 @@
 import React from 'react';
 import { LucideHeart } from 'lucide-react';
-import { useProfilesStore } from '../../profileStore.js';
+import { useProfilesStore } from '../../store/profileStore';
 
 export default function FavoriteButton({ channelId, isFavorite }) {
   const toggleFavorite = useProfilesStore(s => s.toggleFavorite);
@@ -15,7 +15,7 @@ export default function FavoriteButton({ channelId, isFavorite }) {
     <button 
       onClick={handleClick}
       data-tv-focusable="true"
-      className="p-2 rounded-full hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 group"
+      className="p-2 rounded-full hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-[#E8B15A]/70 group"
       title={isFavorite ? "Remove from Favorites" : "Add to Favorites"}
       aria-label={isFavorite ? "Remove from Favorites" : "Add to Favorites"}
     >

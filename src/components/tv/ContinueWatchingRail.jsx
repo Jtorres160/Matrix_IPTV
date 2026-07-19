@@ -37,7 +37,7 @@ export default function ContinueWatchingRail({ historyItems, onPlay }) {
             key={channel.id || idx}
             data-tv-focusable="true"
             onClick={() => onPlay(channel)}
-            className="group relative flex-shrink-0 w-64 h-36 rounded-xl overflow-hidden bg-white/5 border border-transparent transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 focus:z-10 focus:border-white/20 text-left hover:bg-white/10"
+            className="u-tile u-focus group relative flex-shrink-0 w-64 h-36 rounded-xl overflow-hidden focus:z-10 text-left"
           >
             <div className="absolute inset-0 flex items-center justify-center p-4">
                {channel.logo ? (
@@ -48,10 +48,10 @@ export default function ContinueWatchingRail({ historyItems, onPlay }) {
             </div>
             <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent p-4 flex flex-col justify-end">
               <h4 className="text-white font-bold truncate text-lg drop-shadow-md">{channel.name}</h4>
-              <p className="text-[11px] text-blue-300 font-medium truncate mt-1">
+              <p className="text-[11px] text-[#E8B15A] font-medium truncate mt-1">
                 {freqText}{durationText}
               </p>
-              <p className="text-[11px] text-gray-400 truncate">
+              <p className="text-[11px] text-[#A1A1AA] truncate">
                 Last watched: {timeAgoText}
               </p>
             </div>

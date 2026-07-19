@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useProfilesStore } from './profileStore'
+import { useProfilesStore } from './store/profileStore'
 
 export default function ProfileSwitcher({ className }) {
 	const profiles = useProfilesStore((s) => s.profiles)

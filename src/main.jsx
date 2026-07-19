@@ -1,5 +1,6 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
+import './styles/theme.css'
 import App from './supreme_layout.jsx'
 import { ToastProvider } from './providers/ToastProvider.jsx'
 import ToastLayer from './components/ToastLayer.jsx'

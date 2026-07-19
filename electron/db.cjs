@@ -97,6 +97,8 @@ const SCHEMA_SQL = `
     group_title TEXT NOT NULL,
     PRIMARY KEY (playlist_id, group_title),
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+  );
+
   -- ── Phase 10: VOD and Series ─────────────────────────────────────────────
   CREATE TABLE IF NOT EXISTS vod_streams (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -109,6 +111,7 @@ const SCHEMA_SQL = `
     rating REAL,
     added TEXT,
     container_extension TEXT,
+    stream_url TEXT,
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
   );
 
@@ -128,6 +131,26 @@ const SCHEMA_SQL = `
 
   CREATE INDEX IF NOT EXISTS idx_vod_playlist_category ON vod_streams(playlist_id, category_id);
   CREATE INDEX IF NOT EXISTS idx_series_playlist_category ON series(playlist_id, category_id);
+
+  -- ── Phase 11: M3U VOD/Series parity ──────────────────────────────────────
+  CREATE TABLE IF NOT EXISTS series_episodes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    playlist_id TEXT NOT NULL,
+    series_key TEXT NOT NULL,
+    season INTEGER NOT NULL DEFAULT 1,
+    episode INTEGER NOT NULL DEFAULT 0,
+    name TEXT NOT NULL,
+    title TEXT,
+    stream_url TEXT NOT NULL,
+    logo TEXT,
+    group_title TEXT,
+    FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_series_episodes_playlist_series
+    ON series_episodes(playlist_id, series_key);
+  CREATE INDEX IF NOT EXISTS idx_series_episodes_playlist_group
+    ON series_episodes(playlist_id, group_title);
 `;
 
 // ── Database Initialization ──────────────────────────────────────────────────
@@ -136,13 +159,16 @@ const SCHEMA_SQL = `
  * Opens (or creates) the SQLite database file and applies schema + PRAGMAs.
  * Must be called once during app.whenReady(), before any IPC handlers fire.
  *
+ * @param {string} [dbPathOverride] Optional explicit DB path (e.g. ':memory:').
+ *   When provided, used instead of `app.getPath('userData')` — enables
+ *   tests to run under `ELECTRON_RUN_AS_NODE=1` where `app` is undefined.
  * @returns {import('better-sqlite3').Database} The database instance
  */
-function initDatabase() {
+function initDatabase(dbPathOverride) {
   if (db) return db;
 
   const Database = require('better-sqlite3');
-  const dbPath = path.join(app.getPath('userData'), 'matrix_iptv.db');
+  const dbPath = dbPathOverride || path.join(app.getPath('userData'), 'matrix_iptv.db');
 
   console.log(`[DB] Opening SQLite database at: ${dbPath}`);
 
@@ -166,6 +192,10 @@ function initDatabase() {
 
   // ── Schema Creation ────────────────────────────────────────────────────
   db.exec(SCHEMA_SQL);
+
+  // ── Versioned Migrations (additive; existing rows untouched) ───────────
+  const { runMigrations } = require('./migrations.cjs');
+  runMigrations(db);
 
   // ── Prepare Hot-Path Statements ────────────────────────────────────────
   _prepareStatements();
@@ -346,8 +376,8 @@ function _prepareStatements() {
 
   // ── VOD and Series Queries ───────────────────────────────────────────────
   stmts.insertVOD = db.prepare(`
-    INSERT INTO vod_streams (playlist_id, stream_id, name, stream_icon, category_id, group_title, rating, added, container_extension)
-    VALUES (@playlist_id, @stream_id, @name, @stream_icon, @category_id, @group_title, @rating, @added, @container_extension)
+    INSERT INTO vod_streams (playlist_id, stream_id, name, stream_icon, category_id, group_title, rating, added, container_extension, stream_url)
+    VALUES (@playlist_id, @stream_id, @name, @stream_icon, @category_id, @group_title, @rating, @added, @container_extension, @stream_url)
   `);
 
   stmts.clearPlaylistVODs = db.prepare(`
@@ -378,6 +408,30 @@ function _prepareStatements() {
   stmts.getSeriesCategories = db.prepare(`
     SELECT DISTINCT group_title FROM series WHERE playlist_id = ? AND group_title IS NOT NULL AND group_title != '' ORDER BY group_title ASC
   `);
+
+  // ── Series Episodes (M3U parity) ─────────────────────────────────────────
+  stmts.insertSeriesEpisode = db.prepare(`
+    INSERT INTO series_episodes (playlist_id, series_key, season, episode, name, title, stream_url, logo, group_title)
+    VALUES (@playlist_id, @series_key, @season, @episode, @name, @title, @stream_url, @logo, @group_title)
+  `);
+
+  stmts.clearPlaylistSeriesEpisodes = db.prepare(`
+    DELETE FROM series_episodes WHERE playlist_id = ?
+  `);
+
+  stmts.getSeriesEpisodes = db.prepare(`
+    SELECT * FROM series_episodes WHERE playlist_id = ? AND series_key = ?
+    ORDER BY season ASC, episode ASC
+  `);
+
+  stmts.getSeriesEpisodesByCategory = db.prepare(`
+    SELECT * FROM series_episodes WHERE playlist_id = ? AND group_title = ?
+    ORDER BY series_key ASC, season ASC, episode ASC LIMIT ? OFFSET ?
+  `);
+
+  stmts.getVODCount = db.prepare(`SELECT COUNT(*) AS count FROM vod_streams WHERE playlist_id = ?`);
+  stmts.getSeriesCount = db.prepare(`SELECT COUNT(*) AS count FROM series WHERE playlist_id = ?`);
+  stmts.getEpisodeCount = db.prepare(`SELECT COUNT(*) AS count FROM series_episodes WHERE playlist_id = ?`);
 }
 
 // ── Playlist Operations ──────────────────────────────────────────────────────
@@ -682,7 +736,8 @@ function insertVODBatch(playlistId, vods, chunkSize = 500) {
           group_title: vod.group_title || null,
           rating: vod.rating || 0,
           added: vod.added || null,
-          container_extension: vod.container_extension || null
+          container_extension: vod.container_extension || null,
+          stream_url: vod.stream_url || null,
         });
       }
     });
@@ -746,6 +801,104 @@ function getSeriesByCategory(playlistId, groupTitle, limit = 200, offset = 0) {
 function getSeriesCategories(playlistId) {
   _ensureDB();
   return stmts.getSeriesCategories.all(playlistId).map(r => r.group_title);
+}
+
+function insertSeriesEpisodesBatch(playlistId, episodes, chunkSize = 500) {
+  _ensureDB();
+  let inserted = 0;
+  let totalSkipped = 0;
+  for (let i = 0; i < episodes.length; i += chunkSize) {
+    const chunk = episodes.slice(i, i + chunkSize);
+    const txn = db.transaction((rows) => {
+      let skipped = 0;
+      for (const ep of rows) {
+        // Skip episodes with missing/empty stream_url (NOT NULL column constraint)
+        if (!ep.stream_url) {
+          skipped++;
+          continue;
+        }
+        stmts.insertSeriesEpisode.run({
+          playlist_id: playlistId,
+          series_key: ep.series_key,
+          season: ep.season ?? 1,
+          episode: ep.episode ?? 0,
+          name: ep.name || 'Unknown Episode',
+          title: ep.title || null,
+          stream_url: ep.stream_url,
+          logo: ep.logo || null,
+          group_title: ep.group_title || null,
+        });
+      }
+      return skipped;
+    });
+    const skipped = txn(chunk);
+    totalSkipped += skipped;
+    inserted += chunk.length - skipped;
+  }
+  // Log once per call, not once per chunk, so a big playlist with a few
+  // URL-less episodes doesn't spam the log with a warning per 500-row chunk.
+  if (totalSkipped > 0) {
+    console.warn(`[DB] Skipped ${totalSkipped} series episodes with no stream_url.`);
+  }
+  return { inserted };
+}
+
+function clearPlaylistSeriesEpisodes(playlistId) {
+  _ensureDB();
+  return stmts.clearPlaylistSeriesEpisodes.run(playlistId);
+}
+
+/**
+ * Atomically replaces all four M3U media tables (channels, vod_streams, series,
+ * series_episodes) for a playlist. Each table is cleared then re-inserted; the
+ * whole thing runs in a single transaction so a mid-sync failure rolls every
+ * table back to its pre-sync state instead of leaving, say, channels updated
+ * but series stale.
+ *
+ * @param {string} playlistId
+ * @param {{liveChannels:Array, vodRows:Array, seriesRows:Array, episodeRows:Array}} routed
+ * @returns {{inserted:number, insertedVOD:number, insertedSeries:number, insertedEpisodes:number}}
+ */
+function syncPlaylistMediaTables(playlistId, routed) {
+  _ensureDB();
+  // One transaction across all four tables. The per-chunk batch inserts create
+  // their own nested transactions, which better-sqlite3 promotes to SAVEPOINTs,
+  // so a throw at any stage rolls the entire replace back.
+  const run = db.transaction(() => {
+    clearPlaylistChannels(playlistId);
+    const inserted = insertChannelsBatch(playlistId, routed.liveChannels).inserted;
+
+    clearPlaylistVODs(playlistId);
+    const insertedVOD = insertVODBatch(playlistId, routed.vodRows).inserted;
+
+    clearPlaylistSeries(playlistId);
+    const insertedSeries = insertSeriesBatch(playlistId, routed.seriesRows).inserted;
+
+    clearPlaylistSeriesEpisodes(playlistId);
+    const insertedEpisodes = insertSeriesEpisodesBatch(playlistId, routed.episodeRows).inserted;
+
+    return { inserted, insertedVOD, insertedSeries, insertedEpisodes };
+  });
+  return run();
+}
+
+function getSeriesEpisodes(playlistId, seriesKey) {
+  _ensureDB();
+  return stmts.getSeriesEpisodes.all(playlistId, seriesKey);
+}
+
+function getSeriesEpisodesByCategory(playlistId, groupTitle, limit = 5000, offset = 0) {
+  _ensureDB();
+  return stmts.getSeriesEpisodesByCategory.all(playlistId, groupTitle, limit, offset);
+}
+
+function getMediaStats(playlistId) {
+  _ensureDB();
+  return {
+    vodCount: stmts.getVODCount.get(playlistId).count,
+    seriesCount: stmts.getSeriesCount.get(playlistId).count,
+    episodeCount: stmts.getEpisodeCount.get(playlistId).count,
+  };
 }
 
 /**
@@ -872,6 +1025,12 @@ module.exports = {
   clearPlaylistSeries,
   getSeriesByCategory,
   getSeriesCategories,
+  insertSeriesEpisodesBatch,
+  clearPlaylistSeriesEpisodes,
+  syncPlaylistMediaTables,
+  getSeriesEpisodes,
+  getSeriesEpisodesByCategory,
+  getMediaStats,
 
   // Parental Control
   addLockedCategory: (playlistId, groupTitle) => stmts.addLockedCategory.run(playlistId, groupTitle),
