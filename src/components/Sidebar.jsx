@@ -35,20 +35,22 @@ export default function Sidebar({ activeZone, onSelect }) {
          * Triggered by our useKeyboardNavigation hook dynamically applying '.active-focused' 
          */
         .sidebar-item.active-focused {
-          transform: scale(1.05);
-          background-color: rgba(255, 255, 255, 0.1);
-          border-color: #00e5ff; /* Glowing accent */
-          box-shadow: 0 0 20px rgba(0, 229, 255, 0.25);
+          transform: scale(1.04);
+          background-color: rgba(232, 177, 90, 0.10);
+          border-color: rgba(232, 177, 90, 0.85); /* Platinum accent */
+          box-shadow: 0 0 0 1px rgba(232, 177, 90, 0.25),
+                      0 12px 32px -10px rgba(0, 0, 0, 0.8);
           z-index: 10;
         }
 
         .sidebar-item.active-focused .sidebar-icon {
-          color: #ffffff !important;
+          color: #F0C27B !important;
         }
 
         .sidebar-item.active-focused .sidebar-label {
-          color: #ffffff !important;
+          color: #F5F5F7 !important;
           font-weight: 700;
+          letter-spacing: -0.01em;
         }
       `}</style>
 
@@ -77,8 +79,9 @@ export default function Sidebar({ activeZone, onSelect }) {
             left: 0,
             height: '100%',
             width: '260px',
-            backgroundColor: 'rgba(15, 15, 20, 0.95)',
-            backdropFilter: 'blur(12px)',
+            backgroundColor: 'rgba(11, 11, 13, 0.82)',
+            backdropFilter: 'blur(20px) saturate(1.3)',
+            WebkitBackdropFilter: 'blur(20px) saturate(1.3)',
             transformOrigin: 'left',
             /* 80px collapsed width / 260px expanded width = ~0.307 */
             transform: isExpanded ? 'scaleX(1)' : 'scaleX(0.3076)',

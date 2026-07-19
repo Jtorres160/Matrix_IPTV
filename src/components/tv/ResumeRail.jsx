@@ -18,7 +18,7 @@ export default function ResumeRail({ types, onPlay }) {
               data-tv-focusable="true"
               data-nav-zone="continue-watching"
               onClick={() => onPlay(item)}
-              className="group relative flex-shrink-0 w-48 h-28 rounded-xl overflow-hidden bg-white/5 border border-transparent transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 hover:bg-white/10 text-left"
+              className="u-tile u-focus group relative flex-shrink-0 w-48 h-28 rounded-xl overflow-hidden text-left"
               aria-label={`Resume ${item.name}`}
             >
               <div className="absolute inset-0 flex items-center justify-center">
@@ -32,7 +32,7 @@ export default function ResumeRail({ types, onPlay }) {
               <div className="absolute bottom-0 left-0 right-0 p-2">
                 <div className="text-white text-xs font-semibold truncate drop-shadow mb-1">{item.name}</div>
                 <div className="h-1 bg-white/25 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${pct}%` }} />
+                  <div className="h-full bg-[#E8B15A] rounded-full" style={{ width: `${pct}%` }} />
                 </div>
               </div>
             </button>

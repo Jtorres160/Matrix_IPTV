@@ -46,7 +46,7 @@ export default function PlayerStatus() {
                 <button
                   onClick={() => nextChannel()}
                   data-tv-focusable="true"
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="u-focus flex-1 flex items-center justify-center gap-2 py-2.5 u-pill-active rounded-lg font-semibold text-sm"
                 >
                   <LucideSkipForward size={15} />
                   Try Next Channel

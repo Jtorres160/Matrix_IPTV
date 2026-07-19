@@ -9,10 +9,11 @@ import { playMediaItem } from '../lib/media/mediaResolver.js';
 import { groupSeries } from '../lib/media/seriesGrouping.js';
 import { buildShowsFromDbEpisodes, fetchAllSeriesEpisodes } from '../lib/media/dbSeriesAdapter.js';
 import { toPlayableVodItem } from '../lib/media/playableItem.js';
+import { LucideFilm, LucidePlay, LucideLayers } from 'lucide-react';
 
-const ROW_HEIGHT = 280;
-const POSTER_WIDTH = 160;
-const POSTER_HEIGHT = 240;
+const ROW_HEIGHT = 328;
+const POSTER_WIDTH = 178;
+const POSTER_HEIGHT = 267;
 
 export default function VODLibrary({ type = 'vod', onPlayStream }) {
   // ViewRouter passes 'movies' / 'series'; older callers pass 'vod'.
@@ -267,28 +268,27 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
         <style>{`
           .vod-container::-webkit-scrollbar { display: none; }
           .vod-container { -ms-overflow-style: none; scrollbar-width: none; }
-          
-          .vod-card {
-            transition: transform 0.2s cubic-bezier(0.33, 1, 0.68, 1), box-shadow 0.2s, border-color 0.2s;
-            will-change: transform;
-          }
-          .vod-card.active-focused {
-            transform: scale(1.08);
-            border: 2px solid #00e5ff !important;
-            box-shadow: 0 0 25px rgba(0, 229, 255, 0.4);
-            z-index: 10;
-          }
         `}</style>
 
-        <div style={{ padding: '40px 0 20px 40px' }}>
-          <h1 style={{ color: '#fff', fontSize: '2.5rem', margin: 0, fontWeight: 700 }}>
-            {isMovies ? 'Movies' : 'TV Series'}
-          </h1>
+        <div style={{ padding: '44px 0 22px 44px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <span style={{
+              width: '44px', height: '44px', borderRadius: '12px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(232,177,90,0.14)', color: '#E8B15A',
+              border: '1px solid rgba(232,177,90,0.22)'
+            }}>
+              {isMovies ? <LucideFilm size={22} /> : <LucideLayers size={22} />}
+            </span>
+            <h1 style={{ color: '#F5F5F7', fontSize: '2.4rem', margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
+              {isMovies ? 'Movies' : 'TV Series'}
+            </h1>
+          </div>
         </div>
 
         {categories.length === 0 && (
-          <div style={{ padding: '20px 40px', color: '#9aa0a6', maxWidth: '640px' }}>
-            <p style={{ fontSize: '1.2rem', margin: 0 }}>
+          <div style={{ padding: '20px 44px', color: '#A1A1AA', maxWidth: '640px' }}>
+            <p style={{ fontSize: '1.2rem', margin: 0, color: '#F5F5F7', fontWeight: 600 }}>
               {isMovies ? 'No movies found in your sources.' : 'No series found in your sources.'}
             </p>
             <p style={{ fontSize: '0.95rem', marginTop: '10px', lineHeight: 1.5 }}>
@@ -309,12 +309,12 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
             const cards = groupedCategoryData[name] || [];
 
             return (
-              <div key={name} style={{ gridRow: actualIndex + 1, gridColumn: 1, padding: '0 0 0 40px' }}>
-                <h2 style={{ color: '#e0e0e0', fontSize: '1.4rem', margin: '0 0 15px 0', fontWeight: 600 }}>
+              <div key={name} style={{ gridRow: actualIndex + 1, gridColumn: 1, padding: '0 0 0 44px' }}>
+                <h2 style={{ color: '#F5F5F7', fontSize: '1.35rem', margin: '0 0 16px 0', fontWeight: 600, letterSpacing: '-0.01em' }}>
                   {name}
                 </h2>
 
-                <div style={{ display: 'flex', gap: '20px', overflowX: 'visible' }}>
+                <div style={{ display: 'flex', gap: '22px', overflowX: 'visible' }}>
                   {cards.map((card, colIndex) => {
                     // DB rows carry stream_icon/cover; adapter MediaItems carry
                     // poster/logo; grouped shows carry .poster.
@@ -328,44 +328,46 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
                     return (
                       <div
                         key={card.key || card.stream_id || card.series_id || card.id || colIndex}
-                        className="vod-card"
+                        className="vod-card poster-card"
                         data-nav-zone="vod-library"
                         data-nav-row={actualIndex}
                         data-nav-col={colIndex}
                         onClick={onOpen}
-                        style={{
-                          width: `${POSTER_WIDTH}px`,
-                          height: `${POSTER_HEIGHT}px`,
-                          backgroundColor: '#1a1a24',
-                          borderRadius: '8px',
-                          border: '2px solid transparent',
-                          flexShrink: 0,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          overflow: 'hidden',
-                          position: 'relative'
-                        }}
+                        title={itemName}
+                        style={{ width: `${POSTER_WIDTH}px`, height: `${POSTER_HEIGHT}px`, flexShrink: 0 }}
                       >
-                        {posterUrl ? (
+                        {/* Designed fallback ALWAYS sits behind the artwork, so a
+                            missing OR broken poster degrades to this, never a
+                            blank card. */}
+                        <div className="poster-fallback">
+                          <span className="poster-fallback-icon" style={{ color: '#E8B15A', opacity: 0.55 }}>
+                            {isMovies ? <LucideFilm size={30} /> : <LucideLayers size={30} />}
+                          </span>
+                          <span className="poster-fallback-title">{itemName}</span>
+                          {subtitle && <span className="poster-fallback-sub">{subtitle}</span>}
+                        </div>
+
+                        {posterUrl && (
                           <img
                             src={posterUrl}
                             alt={itemName}
                             loading="lazy"
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={(e) => { e.target.style.display = 'none'; }}
+                            className="poster-img"
+                            onError={(e) => { e.target.style.visibility = 'hidden'; }}
                           />
-                        ) : (
-                          <div style={{ padding: '15px', color: '#ddd', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', gap: '8px' }}>
-                            <span style={{ fontWeight: 600 }}>{itemName}</span>
-                            {subtitle && <span style={{ fontSize: '0.8rem', color: '#7fd8cf' }}>{subtitle}</span>}
-                          </div>
                         )}
+
+                        <div className="poster-play"><LucidePlay size={22} fill="currentColor" /></div>
+
+                        <div className="poster-scrim">
+                          <div className="poster-scrim-title">{itemName}</div>
+                          {subtitle && <div style={{ color: '#E8B15A', fontSize: '0.7rem', fontWeight: 500, marginTop: '3px' }}>{subtitle}</div>}
+                        </div>
                       </div>
                     );
                   })}
                   {cards.length === 0 && (
-                    <div style={{ color: '#666' }}>Loading...</div>
+                    <div style={{ color: '#6B6B73', display: 'flex', alignItems: 'center', height: `${POSTER_HEIGHT}px` }}>Loading…</div>
                   )}
                 </div>
               </div>
@@ -382,7 +384,7 @@ const styles = {
     width: '100%',
     height: '100%',
     position: 'relative',
-    backgroundColor: '#0a0a0f',
+    backgroundColor: '#0B0B0D',
   },
   container: {
     width: '100%',

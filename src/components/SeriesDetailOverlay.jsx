@@ -94,15 +94,15 @@ export default function SeriesDetailOverlay({ show, onClose }) {
     return () => window.removeEventListener('keydown', onKey, true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const focusRing = 'ring-2 ring-teal-300 ring-offset-2 ring-offset-[#0a0a0f]';
+  const focusRing = 'ring-2 ring-[#E8B15A]/80 ring-offset-2 ring-offset-[#0B0B0D]';
 
   return (
-    <div className="absolute inset-0 z-[100] bg-[#0a0a0f] flex flex-col" data-series-overlay>
+    <div className="absolute inset-0 z-[100] bg-[#0B0B0D] flex flex-col" data-series-overlay>
       {/* Backdrop */}
       {show.poster && (
         <div className="absolute inset-0 opacity-20 blur-2xl" style={{ backgroundImage: `url(${show.poster})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
       )}
-      <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0f] via-[#0a0a0f]/80 to-[#0a0a0f]/40" />
+      <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0D] via-[#0B0B0D]/80 to-[#0B0B0D]/40" />
 
       <div className="relative z-10 flex-1 flex flex-col p-8 min-h-0">
         {/* Header */}
@@ -119,7 +119,7 @@ export default function SeriesDetailOverlay({ show, onClose }) {
                 {seasonNumbers.length} season{seasonNumbers.length === 1 ? '' : 's'} · {show.episodeCount} episode{show.episodeCount === 1 ? '' : 's'}
               </p>
               {nextUp && (
-                <p className="text-teal-400 mt-1 text-sm">Up next · {episodeLabel(nextUp)}{nextUp._epTitle ? ` · ${nextUp._epTitle}` : ''}</p>
+                <p className="text-[#E8B15A] mt-1 text-sm">Up next · {episodeLabel(nextUp)}{nextUp._epTitle ? ` · ${nextUp._epTitle}` : ''}</p>
               )}
             </div>
           </div>
@@ -139,7 +139,7 @@ export default function SeriesDetailOverlay({ show, onClose }) {
                   <button
                     key="continue"
                     onClick={() => startEpisode(nextUp)}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-lg font-bold text-sm bg-teal-600 text-white hover:bg-teal-500 ${focused ? focusRing : ''}`}
+                    className={`flex items-center gap-2 px-4 py-3 rounded-lg font-bold text-sm u-pill-active ${focused ? focusRing : ''}`}
                   >
                     <LucidePlay size={16} /> Continue
                   </button>
@@ -174,9 +174,9 @@ export default function SeriesDetailOverlay({ show, onClose }) {
                     focused ? `bg-white/10 ${focusRing}` : 'bg-white/5 hover:bg-white/10'
                   }`}
                 >
-                  <span className="w-14 shrink-0 font-mono text-xs text-teal-400 tabular-nums">{episodeLabel(ep)}</span>
+                  <span className="w-14 shrink-0 font-mono text-xs text-[#E8B15A] tabular-nums">{episodeLabel(ep)}</span>
                   <span className="flex-1 min-w-0 truncate text-sm text-gray-100">{ep._epTitle || ep.name}</span>
-                  {watched && <LucideCheck size={16} className="text-teal-400 shrink-0" title="Watched" />}
+                  {watched && <LucideCheck size={16} className="text-[#E8B15A] shrink-0" title="Watched" />}
                   <LucidePlay size={16} className="text-gray-400 shrink-0" />
                 </button>
               );

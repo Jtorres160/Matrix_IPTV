@@ -15,9 +15,9 @@ export default function ProgramCard({ program, isLive, onClick, onSchedule }) {
       <button
         data-tv-focusable="true"
         onClick={onClick}
-        className="group relative h-20 w-full flex flex-col justify-center px-4 rounded-xl border border-transparent transition-all overflow-hidden focus:outline-none focus:ring-4 focus:ring-blue-500 focus:z-10 text-left bg-white/5 hover:bg-white/10"
+        className="u-focus group relative h-20 w-full flex flex-col justify-center px-4 rounded-xl border border-transparent overflow-hidden focus:z-10 text-left bg-white/5 hover:bg-white/10"
       >
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500/0 via-blue-500/50 to-blue-500/0 opacity-0 group-focus:opacity-100 transition-opacity" />
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#E8B15A]/0 via-[#E8B15A]/60 to-[#E8B15A]/0 opacity-0 group-focus:opacity-100 transition-opacity" />
 
         <div className="flex justify-between items-start w-full">
           <h4 className={`text-sm font-bold truncate pr-2 ${isLive ? 'text-white' : 'text-gray-300'} group-focus:text-white`}>
@@ -35,7 +35,7 @@ export default function ProgramCard({ program, isLive, onClick, onSchedule }) {
         </div>
 
         {/* Description overlay on focus */}
-        <div className="absolute inset-0 bg-blue-600 opacity-0 group-focus:opacity-100 transition-opacity -z-10 rounded-xl" />
+        <div className="absolute inset-0 bg-[#E8B15A]/25 opacity-0 group-focus:opacity-100 transition-opacity -z-10 rounded-xl" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent opacity-0 group-focus:opacity-100 transition-opacity rounded-xl" />
 
         <div className="absolute bottom-2 right-2 opacity-0 group-focus:opacity-100 transition-opacity">

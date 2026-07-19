@@ -369,7 +369,7 @@ export default function App() {
   }
 
   return (
-    <div className={`relative w-screen h-screen overflow-hidden font-sans ${darkMode ? "bg-[#0a1f22] text-gray-100" : "bg-gray-100 text-gray-900"}`}>
+    <div className={`relative w-screen h-screen overflow-hidden font-sans ${darkMode ? "bg-[#0B0B0D] text-[#F5F5F7]" : "bg-gray-100 text-gray-900"}`}>
       
       <AutoplayResume enabled={!!activeSettings?.autoplayLastChannel} />
 
@@ -383,7 +383,7 @@ export default function App() {
           isImmersivePlayer || currentView === 'player'
             ? 'absolute inset-0 bg-black z-50'
             : playerDock === 'preview' && currentView === 'channels' && hasActiveChannel
-              ? 'absolute top-4 right-4 w-96 h-[216px] bg-black z-40 rounded-xl overflow-hidden border border-white/10 shadow-2xl'
+              ? 'absolute top-4 right-4 w-96 h-[216px] bg-black z-40 rounded-2xl overflow-hidden border border-[#E8B15A]/25 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)] ring-1 ring-black/40'
               : 'absolute inset-0 bg-black z-0'
         }
       >

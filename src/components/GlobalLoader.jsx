@@ -34,7 +34,7 @@ export default function GlobalLoader({ isLoading }) {
         }
       `}</style>
       <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-4 border-[#00e5ff] border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-12 h-12 border-4 border-[#E8B15A] border-t-transparent rounded-full animate-spin"></div>
         <span className="text-white text-lg font-semibold tracking-wider">Loading...</span>
       </div>
     </div>

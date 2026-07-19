@@ -100,10 +100,10 @@ export default function VODDetailOverlay({ item, type, onClose, onPlay }) {
           transition: transform 0.2s cubic-bezier(0.33, 1, 0.68, 1), background-color 0.2s, color 0.2s;
         }
         .action-btn.active-focused {
-          background-color: #00e5ff !important;
-          color: #000 !important;
+          background-color: #E8B15A !important;
+          color: #141310 !important;
           transform: scale(1.05);
-          box-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+          box-shadow: 0 0 24px rgba(232, 177, 90, 0.45);
         }
       `}</style>
       
@@ -116,10 +116,16 @@ export default function VODDetailOverlay({ item, type, onClose, onPlay }) {
 
       <div style={styles.content}>
         <div style={styles.posterContainer}>
-          {posterUrl ? (
-            <img src={posterUrl} alt={item.name} style={styles.poster} />
-          ) : (
-            <div style={{...styles.poster, backgroundColor: '#222'}} />
+          <div style={styles.posterFallback}>
+            <span style={{ fontWeight: 600, color: '#F5F5F7', fontSize: '1.1rem' }}>{item.name}</span>
+          </div>
+          {posterUrl && (
+            <img
+              src={posterUrl}
+              alt={item.name}
+              style={styles.poster}
+              onError={(e) => { e.target.style.visibility = 'hidden'; }}
+            />
           )}
         </div>
 
@@ -127,7 +133,7 @@ export default function VODDetailOverlay({ item, type, onClose, onPlay }) {
           <h1 style={styles.title}>{item.name}</h1>
           <div style={styles.metaRow}>
             {metadata?.year && <span style={styles.metaBadge}>{metadata.year}</span>}
-            {rating > 0 && <span style={styles.metaBadge}>★ {Number(rating).toFixed(1)}</span>}
+            {rating > 0 && <span style={{...styles.metaBadge, color: '#E8B15A', borderColor: 'rgba(232,177,90,0.35)'}}>★ {Number(rating).toFixed(1)}</span>}
             {item.added && <span style={styles.metaBadge}>Added: {new Date(item.added * 1000).toLocaleDateString()}</span>}
           </div>
           <p style={styles.description}>{description}</p>
@@ -159,7 +165,7 @@ export default function VODDetailOverlay({ item, type, onClose, onPlay }) {
 const styles = {
   overlay: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#050505',
+    backgroundColor: '#0B0B0D',
     zIndex: 100,
     display: 'flex',
     alignItems: 'center',
@@ -175,7 +181,7 @@ const styles = {
   },
   backdropGradient: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    background: 'linear-gradient(to top, #0a0a0f 0%, rgba(10,10,15,0.2) 100%)',
+    background: 'linear-gradient(to top, #0B0B0D 0%, rgba(11,11,13,0.2) 100%)',
   },
   content: {
     position: 'relative',
@@ -188,15 +194,28 @@ const styles = {
     alignItems: 'center'
   },
   posterContainer: {
+    position: 'relative',
     flexShrink: 0,
     width: '300px',
     height: '450px',
-    borderRadius: '12px',
+    borderRadius: '16px',
     overflow: 'hidden',
-    boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
-    border: '2px solid rgba(255,255,255,0.1)'
+    boxShadow: '0 30px 70px -20px rgba(0,0,0,0.9)',
+    border: '1px solid rgba(232,177,90,0.25)'
+  },
+  posterFallback: {
+    position: 'absolute',
+    inset: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    padding: '24px',
+    background: 'radial-gradient(120% 80% at 50% 0%, rgba(232,177,90,0.12), transparent 60%), linear-gradient(155deg, #23222B 0%, #16151B 55%, #0E0D12 100%)',
   },
   poster: {
+    position: 'absolute',
+    inset: 0,
     width: '100%',
     height: '100%',
     objectFit: 'cover'
@@ -222,10 +241,11 @@ const styles = {
   },
   metaBadge: {
     padding: '6px 12px',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: '4px',
-    color: '#e0e0e0',
-    fontSize: '1.1rem',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    border: '1px solid rgba(255,255,255,0.10)',
+    borderRadius: '8px',
+    color: '#F5F5F7',
+    fontSize: '1.05rem',
     fontWeight: 600
   },
   description: {

@@ -162,15 +162,15 @@ export default function LiveTVView({ isActive = true }) {
     
     if (isFailed) {
        return (
-         <div className="flex flex-col items-center justify-center h-full w-full bg-[#050c0e] text-center p-8 z-20 relative">
+         <div className="flex flex-col items-center justify-center h-full w-full u-surface text-center p-8 z-20 relative">
            <div className="w-24 h-24 bg-red-900/10 text-red-500 rounded-full flex items-center justify-center mb-6 shadow-inner border border-red-900/30">
              <LucideTv size={48} />
            </div>
            <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">No channels available</h2>
-           <p className="text-gray-400 max-w-md mb-6">Your playlist failed to load. {mainPlaylist.lastError ? `(${mainPlaylist.lastError})` : ''}</p>
-           <button 
-             onClick={() => setCurrentView('playlists')} 
-             className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-all shadow-lg focus:outline-none focus:ring-4 focus:ring-blue-500"
+           <p className="text-[#A1A1AA] max-w-md mb-6">Your playlist failed to load. {mainPlaylist.lastError ? `(${mainPlaylist.lastError})` : ''}</p>
+           <button
+             onClick={() => setCurrentView('playlists')}
+             className="u-focus px-6 py-2.5 u-pill-active rounded-xl font-semibold"
            >
              Manage Playlist
            </button>
@@ -188,9 +188,9 @@ export default function LiveTVView({ isActive = true }) {
 
       {/* Channel number OSD — feedback while typing digits to zap */}
       {channelNumber && (
-        <div className="fixed top-8 right-8 z-50 px-8 py-4 bg-black/85 backdrop-blur-md border border-white/20 rounded-2xl shadow-2xl pointer-events-none">
-          <div className="text-5xl font-black text-white tracking-[0.2em] tabular-nums">{channelNumber}</div>
-          <div className="text-xs text-gray-400 mt-1 text-center uppercase tracking-widest">Channel</div>
+        <div className="fixed top-8 right-8 z-50 px-8 py-4 u-glass rounded-2xl shadow-[0_24px_60px_-12px_rgba(0,0,0,0.85)] pointer-events-none">
+          <div className="text-5xl font-black text-[#F0C27B] tracking-[0.2em] tabular-nums drop-shadow-[0_0_18px_rgba(232,177,90,0.4)]">{channelNumber}</div>
+          <div className="text-xs text-[#A1A1AA] mt-1 text-center uppercase tracking-[0.3em]">Channel</div>
         </div>
       )}
 
@@ -201,24 +201,24 @@ export default function LiveTVView({ isActive = true }) {
         {/* Top Header Layer */}
         <div className="flex justify-between items-start pointer-events-auto">
           <div className="flex gap-4 items-center">
-            <button 
+            <button
               data-tv-focusable="true"
               onClick={() => setIsGuideOpen(true)}
-              className="px-6 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full text-white font-bold transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 flex items-center gap-2"
+              className="u-focus px-6 py-2.5 u-glass hover:bg-white/10 rounded-full text-white font-semibold flex items-center gap-2"
             >
-              <LucideListVideo size={18} />
-              Open Guide (G)
+              <LucideListVideo size={18} className="text-[#E8B15A]" />
+              Open Guide <span className="text-[#A1A1AA] font-normal">(G)</span>
             </button>
           </div>
-          
+
           <div className="relative w-64 shrink-0">
-            <LucideSearch size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Search..." 
+            <LucideSearch size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6B6B73]" />
+            <input
+              type="text"
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-black/50 backdrop-blur-md border border-white/10 rounded-full py-2 pl-10 pr-4 text-sm text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+              className="w-full u-glass rounded-full py-2 pl-10 pr-4 text-sm text-white placeholder-[#6B6B73] focus:outline-none focus:ring-2 focus:ring-[#E8B15A]/80 focus:border-transparent transition-all"
             />
           </div>
         </div>
@@ -235,7 +235,7 @@ export default function LiveTVView({ isActive = true }) {
       </div>
 
       {/* ── HOME LAYOUT SECTIONS ── */}
-      <div className="w-full min-h-[40vh] bg-[#050c0e] flex flex-col pb-20 relative z-20 shadow-[0_-20px_50px_rgba(0,0,0,0.8)]">
+      <div className="w-full min-h-[40vh] u-surface flex flex-col pb-20 relative z-20 shadow-[0_-24px_60px_rgba(0,0,0,0.85)]">
         
         {/* CONTINUE WATCHING */}
         <div className="mt-8">
@@ -278,7 +278,7 @@ export default function LiveTVView({ isActive = true }) {
                   key={idx}
                   data-tv-focusable="true"
                   onClick={() => handlePlayChannel(channel)}
-                  className="group relative flex-shrink-0 w-48 h-24 rounded-lg overflow-hidden bg-white/5 border border-transparent transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 focus:z-10 focus:border-white/20 text-left hover:bg-white/10"
+                  className="u-tile u-focus group relative flex-shrink-0 w-48 h-24 rounded-xl overflow-hidden focus:z-10 text-left"
                 >
                   <div className="absolute inset-0 flex items-center justify-center p-4">
                      {channel.logo ? (
@@ -370,8 +370,8 @@ function HeroNowPlaying({ channel, epgData }) {
             </span>
           </p>
           {progress != null && (
-            <div className="w-96 max-w-full h-1 bg-white/20 rounded-full mt-3 overflow-hidden">
-              <div className="h-full bg-red-500 rounded-full" style={{ width: `${Math.round(progress * 100)}%` }} />
+            <div className="w-96 max-w-full h-1 bg-white/15 rounded-full mt-3 overflow-hidden">
+              <div className="h-full bg-[#E8B15A] rounded-full shadow-[0_0_10px_rgba(232,177,90,0.6)]" style={{ width: `${Math.round(progress * 100)}%` }} />
             </div>
           )}
           {next && (
@@ -401,10 +401,10 @@ function CategoryRibbon({ categories, activeCategory, setActiveCategory }) {
       <button
         data-tv-focusable="true"
         onClick={() => setActiveCategory(null)}
-        className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 ${
+        className={`u-focus whitespace-nowrap px-5 py-2 rounded-full text-sm font-semibold ${
           activeCategory === null
-            ? 'bg-blue-600 text-white shadow-lg' 
-            : 'bg-white/5 text-gray-300 hover:bg-white/10'
+            ? 'u-pill-active'
+            : 'bg-white/5 text-[#A1A1AA] hover:bg-white/10 hover:text-white border border-[var(--hairline)]'
         }`}
       >
         All
@@ -414,10 +414,10 @@ function CategoryRibbon({ categories, activeCategory, setActiveCategory }) {
           key={cat}
           data-tv-focusable="true"
           onClick={() => setActiveCategory(cat)}
-          className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold transition-all focus:outline-none focus:ring-4 focus:ring-blue-500 ${
-            activeCategory === cat 
-              ? 'bg-blue-600 text-white shadow-lg' 
-              : 'bg-white/5 text-gray-300 hover:bg-white/10'
+          className={`u-focus whitespace-nowrap px-5 py-2 rounded-full text-sm font-semibold ${
+            activeCategory === cat
+              ? 'u-pill-active'
+              : 'bg-white/5 text-[#A1A1AA] hover:bg-white/10 hover:text-white border border-[var(--hairline)]'
           }`}
         >
           {cat}
@@ -482,13 +482,13 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
         style={{ position: 'absolute', top: i * ITEM_HEIGHT, left: 0, right: 0, height: ITEM_HEIGHT }}
         className="py-1"
       >
-        <div 
+        <div
           data-tv-focusable="true"
           onClick={() => onPlay(channel)}
-          className={`h-full flex items-center px-4 rounded-xl cursor-pointer transition-all group focus:outline-none focus:ring-4 focus:ring-blue-500 focus:z-10 ${
-            isPlaying 
-              ? 'bg-blue-600/20 border-l-4 border-blue-500' 
-              : 'hover:bg-white/5 bg-white/5 border-l-4 border-transparent'
+          className={`u-focus h-full flex items-center px-4 rounded-xl cursor-pointer group focus:z-10 border-l-[3px] ${
+            isPlaying
+              ? 'bg-[#E8B15A]/12 border-[#E8B15A]'
+              : 'hover:bg-white/[0.06] bg-white/[0.03] border-transparent'
           }`}
         >
           {/* Channel number — matches 0-9 zapping */}
@@ -508,18 +508,18 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
           {/* Details */}
           <div className="truncate pr-4 flex-1">
             <div className="flex items-center gap-3">
-              <h3 className={`font-bold text-lg truncate ${isPlaying ? 'text-blue-400' : 'text-gray-100'}`}>
+              <h3 className={`font-bold text-lg truncate ${isPlaying ? 'text-[#F0C27B]' : 'text-[#F5F5F7]'}`}>
                 {channel.name}
               </h3>
-              {isPlaying && <span className="flex shrink-0 w-2 h-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></span>}
+              {isPlaying && <span className="flex shrink-0 w-2 h-2 rounded-full bg-[#E8B15A] animate-pulse shadow-[0_0_10px_rgba(232,177,90,0.9)]"></span>}
             </div>
-            <p className="text-sm text-gray-400 truncate mt-0.5">
-              {nowProgram && <span className="text-blue-400 font-medium mr-2">{formatTime(nowProgram.start)}</span>}
+            <p className="text-sm text-[#A1A1AA] truncate mt-0.5">
+              {nowProgram && <span className="text-[#E8B15A] font-medium mr-2">{formatTime(nowProgram.start)}</span>}
               {currentProgram}
             </p>
             {progress != null && (
               <div className="w-40 h-0.5 bg-white/10 rounded-full mt-1.5 overflow-hidden">
-                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.round(progress * 100)}%` }} />
+                <div className="h-full bg-[#E8B15A] rounded-full" style={{ width: `${Math.round(progress * 100)}%` }} />
               </div>
             )}
           </div>
@@ -554,12 +554,12 @@ function VirtualizedChannelList({ channels, activeUrl, onPlay, favorites, onTogg
 
 function EmptyState({ icon, title, subtitle }) {
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full bg-[#050c0e] text-center p-8 z-20 relative">
-      <div className="w-24 h-24 bg-blue-900/10 text-blue-500 rounded-full flex items-center justify-center mb-6 shadow-inner border border-blue-900/30">
+    <div className="flex flex-col items-center justify-center h-full w-full u-surface text-center p-8 z-20 relative">
+      <div className="w-24 h-24 u-accent-soft text-[#E8B15A] rounded-full flex items-center justify-center mb-6 shadow-inner border border-[#E8B15A]/20">
         {React.cloneElement(icon, { size: 48 })}
       </div>
       <h2 className="text-3xl font-bold text-white mb-2 tracking-tight">{title}</h2>
-      <p className="text-gray-400 max-w-md">{subtitle}</p>
+      <p className="text-[#A1A1AA] max-w-md">{subtitle}</p>
     </div>
   );
 }

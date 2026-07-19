@@ -124,7 +124,7 @@ export default function PlayerControls() {
           <div className="flex items-center gap-4 mb-2">
             <button 
               onClick={handleBack} 
-              className="p-2 -ml-2 rounded-full hover:bg-white/20 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="p-2 -ml-2 rounded-full hover:bg-white/20 text-white transition-colors focus:outline-none focus:ring-2 focus:ring-[#E8B15A]/70"
               title="Back to Live TV"
             >
               <LucideArrowLeft size={24} />
@@ -156,7 +156,7 @@ export default function PlayerControls() {
               step="0.1"
               value={Math.min(currentTime, duration || 0)}
               onChange={(e) => seek(parseFloat(e.target.value))}
-              className="flex-1 h-1.5 bg-white/30 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              className="flex-1 h-1.5 bg-white/30 rounded-lg appearance-none cursor-pointer accent-[#E8B15A]"
               aria-label="Seek"
             />
             <span className="text-xs text-gray-400 tabular-nums w-14">{fmtTime(duration)}</span>
@@ -173,7 +173,7 @@ export default function PlayerControls() {
           <div className="flex items-center gap-6">
             <button 
               onClick={isPlaying ? pause : play}
-              className="text-white hover:text-blue-400 transition-colors focus:outline-none"
+              className="text-white hover:text-[#F0C27B] transition-colors focus:outline-none"
             >
               {isPlaying ? <LucidePause size={28} /> : <LucidePlay size={28} />}
             </button>
@@ -181,7 +181,7 @@ export default function PlayerControls() {
             <div className="flex items-center gap-3 group">
               <button 
                 onClick={toggleMute}
-                className="text-white hover:text-blue-400 transition-colors focus:outline-none"
+                className="text-white hover:text-[#F0C27B] transition-colors focus:outline-none"
               >
                 {muted || volume === 0 ? <LucideVolumeX size={24} /> : <LucideVolume2 size={24} />}
               </button>
@@ -228,7 +228,7 @@ export default function PlayerControls() {
               <button
                 onClick={openTracks}
                 title="Audio & subtitles"
-                className="flex items-center gap-1.5 text-white hover:text-blue-400 transition-colors focus:outline-none"
+                className="flex items-center gap-1.5 text-white hover:text-[#F0C27B] transition-colors focus:outline-none"
               >
                 <LucideSubtitles size={22} />
               </button>
@@ -255,7 +255,7 @@ export default function PlayerControls() {
             <button
               onClick={cycleVideoFit}
               title="Aspect ratio"
-              className="flex items-center gap-1.5 text-white hover:text-blue-400 transition-colors focus:outline-none"
+              className="flex items-center gap-1.5 text-white hover:text-[#F0C27B] transition-colors focus:outline-none"
             >
               <LucideRatio size={22} />
               <span className="text-xs font-semibold uppercase tracking-wide">{FIT_LABEL[videoFit] || 'Fit'}</span>
@@ -263,7 +263,7 @@ export default function PlayerControls() {
 
             <button
               onClick={toggleFullscreen}
-              className="text-white hover:text-blue-400 transition-colors focus:outline-none"
+              className="text-white hover:text-[#F0C27B] transition-colors focus:outline-none"
             >
               {isFullscreen ? <LucideMinimize size={24} /> : <LucideMaximize size={24} />}
             </button>
@@ -288,11 +288,11 @@ function TrackSection({ title, tracks, empty, onPick }) {
             key={`${title}-${t.id}`}
             onClick={() => onPick(t.id)}
             className={`w-full flex items-center justify-between px-2 py-1.5 rounded-md text-sm text-left transition-colors ${
-              t.active ? 'bg-blue-600/30 text-blue-300' : 'text-gray-200 hover:bg-white/10'
+              t.active ? 'bg-[#E8B15A]/20 text-[#F0C27B]' : 'text-gray-200 hover:bg-white/10'
             }`}
           >
             <span className="truncate">{t.name}</span>
-            {t.active && <span className="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />}
+            {t.active && <span className="w-1.5 h-1.5 rounded-full bg-[#E8B15A] shrink-0" />}
           </button>
         ))
       )}
