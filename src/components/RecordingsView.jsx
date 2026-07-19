@@ -32,12 +32,12 @@ export default function RecordingsView() {
   if (!isPro) {
     return (
       <div className="w-full h-full flex flex-col items-center justify-center text-center p-12">
-        <LucideLock size={48} className="text-amber-400 mb-6" />
+        <LucideLock size={48} className="text-[#E8B15A] mb-6" />
         <div className="text-xl font-bold text-slate-200 mb-2">Recordings is a Matrix Pro feature</div>
         <div className="text-sm text-slate-500 max-w-sm mb-6">Unlock DVR recording, scheduled recordings, and your Recordings library.</div>
         <button
           onClick={() => setUpsellOpen(true)}
-          className="px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold focus:outline-none"
+          className="u-focus px-5 py-2.5 rounded-lg u-pill-active font-semibold"
         >
           Unlock Matrix Pro
         </button>
@@ -59,10 +59,10 @@ export default function RecordingsView() {
             onClick={() => setSegment(s.id)}
             data-nav-zone="recordings-segments"
             data-nav-index={index}
-            className={`px-5 py-2 rounded-full text-sm font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-sky-400 ${
+            className={`u-focus px-5 py-2 rounded-full text-sm font-semibold ${
               segment === s.id
-                ? 'bg-sky-600 text-white'
-                : 'bg-white/5 text-slate-300 hover:bg-white/10'
+                ? 'u-pill-active'
+                : 'bg-white/5 text-slate-300 hover:bg-white/10 border border-[var(--hairline)]'
             }`}
           >
             {s.label}

@@ -44,10 +44,10 @@ export default function UpsellModal({ open, onClose, reason }) {
     <>
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[60]" onClick={onClose} />
       <div className="fixed inset-0 z-[61] flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-[#0c2a2d] border border-gray-700 rounded-2xl shadow-2xl p-6">
+        <div className="w-full max-w-md u-glass rounded-2xl shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9)] p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-2">
-              <LucideLock size={20} className="text-amber-400" />
+              <LucideLock size={20} className="text-[#E8B15A]" />
               <h2 className="text-xl font-bold text-white">Matrix Pro</h2>
             </div>
             <button onClick={onClose} className="p-1 text-gray-400 hover:text-white rounded-lg focus:outline-none">
@@ -55,7 +55,7 @@ export default function UpsellModal({ open, onClose, reason }) {
             </button>
           </div>
 
-          {reason && <p className="text-sm text-amber-300/90 mb-4">{reason}</p>}
+          {reason && <p className="text-sm text-[#F0C27B]/90 mb-4">{reason}</p>}
 
           <ul className="space-y-2 mb-6">
             {BENEFITS.map((b) => (
@@ -68,7 +68,7 @@ export default function UpsellModal({ open, onClose, reason }) {
 
           <button
             onClick={handleGetPro}
-            className="w-full mb-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-amber-300"
+            className="u-focus w-full mb-4 py-2.5 rounded-lg u-pill-active font-semibold"
           >
             Get Matrix Pro
           </button>
@@ -82,12 +82,12 @@ export default function UpsellModal({ open, onClose, reason }) {
                 onChange={(e) => setKey(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleActivate()}
                 placeholder="Paste your license key"
-                className="flex-1 bg-[#0a1f22] border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 bg-black/40 border border-[var(--hairline)] rounded-lg px-3 py-2 text-sm text-white placeholder-[#6B6B73] focus:outline-none focus:ring-2 focus:ring-[#E8B15A]/70"
               />
               <button
                 onClick={handleActivate}
                 disabled={busy}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm font-semibold focus:outline-none"
+                className="px-4 py-2 rounded-lg u-pill-active disabled:opacity-50 text-sm font-semibold focus:outline-none"
               >
                 Activate
               </button>

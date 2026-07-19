@@ -13,7 +13,7 @@ export default function SourceManagerView() {
   const [activeTab, setActiveTab] = useState('m3u_url');
   
   return (
-    <div className="flex h-full w-full bg-[#0a1f22] text-gray-200">
+    <div className="flex h-full w-full bg-black/40 text-gray-200">
       {/* Sidebar / Tabs */}
       <div className="w-64 bg-[#0c2a2d] border-r border-gray-700 flex flex-col">
         <div className="p-6">
@@ -57,7 +57,7 @@ export default function SourceManagerView() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-[#0a1f22] to-[#0d2e33]">
+      <div className="flex-1 flex flex-col relative overflow-hidden bg-gradient-to-br from-[#0B0B0D] to-[#111114]">
         <div className="flex-1 overflow-y-auto p-8">
           <div className="max-w-4xl mx-auto space-y-12">
             {activeTab === 'm3u_url' && <M3uUrlManager />}
@@ -83,7 +83,7 @@ function TabButton({ active, onClick, icon, label, badge }) {
       onClick={onClick}
       className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 ${
         active 
-          ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-inner' 
+          ? 'bg-[#E8B15A]/15 text-[#E8B15A] border border-[#E8B15A]/30 shadow-inner' 
           : 'text-gray-400 hover:bg-white/5 hover:text-gray-200 border border-transparent'
       }`}
     >
@@ -221,7 +221,7 @@ function M3uUrlManager() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="http://example.com/playlist.m3u"
-            className="w-full bg-[#0a1f22] border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+            className="w-full bg-black/40 border border-[var(--hairline)] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#E8B15A]/70 transition-shadow"
             onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
           />
         </div>
@@ -236,7 +236,7 @@ function M3uUrlManager() {
             className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
               !url || isProcessing 
                 ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20'
+                : 'u-pill-active shadow-lg'
             }`}
           >
             {isProcessing ? 'Importing...' : 'Add Source'}
@@ -301,16 +301,16 @@ function LocalFileManager() {
       <div 
         className={`relative flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-xl transition-all duration-200 ${
           dragActive 
-            ? 'border-blue-500 bg-blue-500/10' 
-            : 'border-gray-600 bg-[#123236] hover:border-gray-500 hover:bg-[#15383d]'
+            ? 'border-[#E8B15A] bg-[#E8B15A]/10' 
+            : 'border-[var(--hairline)] bg-[#123236] hover:border-gray-500 hover:bg-[#15383d]'
         }`}
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
       >
-        <div className="w-16 h-16 bg-[#0a1f22] rounded-full flex items-center justify-center mb-4 shadow-inner">
-          <LucideFile size={28} className="text-blue-400" />
+        <div className="w-16 h-16 bg-black/40 rounded-full flex items-center justify-center mb-4 shadow-inner">
+          <LucideFile size={28} className="text-[#E8B15A]" />
         </div>
         <h3 className="text-lg font-semibold text-white mb-2">Drag & Drop M3U File Here</h3>
         <p className="text-gray-400 mb-6 text-sm">or click to browse your computer</p>
@@ -447,7 +447,7 @@ function SavedPlaylistsList() {
         const isError = playlist.status === 'failed';
         
         let statusColor = "bg-green-500";
-        if (isRefreshing) statusColor = "bg-blue-500 animate-pulse";
+        if (isRefreshing) statusColor = "bg-[#E8B15A] animate-pulse";
         if (isError) statusColor = "bg-red-500";
         
         const lastSync = playlist.lastUpdated ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: 'numeric' }).format(new Date(playlist.lastUpdated)) : 'Never';
@@ -456,8 +456,8 @@ function SavedPlaylistsList() {
           <div key={playlist.id || idx} className={`flex flex-col p-5 bg-[#123236] rounded-xl border ${isError ? 'border-red-900/50' : 'border-gray-700'} shadow-md group transition-all`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-5 overflow-hidden w-2/3">
-                <div className="w-12 h-12 rounded-xl bg-[#0a1f22] border border-gray-600 flex items-center justify-center shrink-0 shadow-inner">
-                  <LucideLink size={20} className="text-blue-400" />
+                <div className="w-12 h-12 rounded-xl bg-black/40 border border-[var(--hairline)] flex items-center justify-center shrink-0 shadow-inner">
+                  <LucideLink size={20} className="text-[#E8B15A]" />
                 </div>
                 <div className="truncate pr-4 w-full">
                   <div className="text-base font-semibold text-white truncate mb-1">{playlist.name || playlist.url}</div>
@@ -483,7 +483,7 @@ function SavedPlaylistsList() {
                 <button 
                   onClick={() => handleRefresh(playlist, idx === 0)}
                   disabled={isRefreshing}
-                  className={`p-2.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 ${isRefreshing ? 'text-blue-400 bg-blue-900/20' : 'text-gray-400 hover:text-white hover:bg-gray-700'}`}
+                  className={`p-2.5 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-[#E8B15A]/70 ${isRefreshing ? 'text-[#E8B15A] bg-[#E8B15A]/10' : 'text-gray-400 hover:text-white hover:bg-gray-700'}`}
                   title="Manual Refresh"
                 >
                   <LucidePlay size={18} className={isRefreshing ? 'animate-spin' : ''} />
@@ -515,7 +515,7 @@ function StatusMessage({ status }) {
   if (!status || !status.msg) return null;
 
   const config = {
-    loading: { icon: <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />, color: 'text-blue-400' },
+    loading: { icon: <div className="w-4 h-4 border-2 border-[#E8B15A] border-t-transparent rounded-full animate-spin" />, color: 'text-[#E8B15A]' },
     success: { icon: <LucideCheckCircle2 size={16} />, color: 'text-green-400' },
     error: { icon: <LucideAlertCircle size={16} />, color: 'text-red-400' },
   }[status.type] || { icon: null, color: 'text-gray-400' };
@@ -558,14 +558,14 @@ function XtreamAccountPanel({ playlist }) {
     <div className="bg-[#123236] border border-gray-700 rounded-xl p-5 shadow-lg" data-xtream-account>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3 min-w-0">
-          <LucideServer size={18} className="text-blue-400 shrink-0" />
+          <LucideServer size={18} className="text-[#E8B15A] shrink-0" />
           <h3 className="text-lg font-bold text-white truncate">{playlist.name || 'Xtream Source'}</h3>
           {ui && (
             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${isActive ? 'bg-green-600/25 text-green-300' : 'bg-red-600/25 text-red-300'}`}>
               {isActive ? 'Active' : (ui.status || 'Inactive')}
             </span>
           )}
-          {isTrial && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-500/25 text-amber-300">Trial</span>}
+          {isTrial && <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-[#E8B15A]/20 text-[#F0C27B]">Trial</span>}
         </div>
         <button onClick={load} title="Refresh" className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 shrink-0">
           {state.status === 'loading' ? <LucideLoader2 size={16} className="animate-spin" /> : <LucideRefreshCw size={16} />}
@@ -583,23 +583,23 @@ function XtreamAccountPanel({ playlist }) {
       {ui && (
         <div className="grid grid-cols-2 gap-4">
           <InfoTile
-            icon={<LucideCalendarClock size={16} className="text-blue-400" />}
+            icon={<LucideCalendarClock size={16} className="text-[#E8B15A]" />}
             label="Expires"
             value={exp ? exp.toLocaleDateString() : 'Unlimited'}
             sub={daysLeft != null ? (daysLeft >= 0 ? `${daysLeft} day${daysLeft === 1 ? '' : 's'} left` : `Expired ${Math.abs(daysLeft)}d ago`) : null}
             danger={daysLeft != null && daysLeft <= 3}
           />
           <InfoTile
-            icon={<LucideUsers size={16} className="text-blue-400" />}
+            icon={<LucideUsers size={16} className="text-[#E8B15A]" />}
             label="Connections"
             value={`${ui.active_cons ?? 0} / ${ui.max_connections ?? '—'}`}
             sub="active / allowed"
           />
           {srv?.url && (
-            <InfoTile icon={<LucideGlobe size={16} className="text-blue-400" />} label="Server" value={srv.url + (srv.port ? `:${srv.port}` : '')} />
+            <InfoTile icon={<LucideGlobe size={16} className="text-[#E8B15A]" />} label="Server" value={srv.url + (srv.port ? `:${srv.port}` : '')} />
           )}
           {srv?.timezone && (
-            <InfoTile icon={<LucideGlobe size={16} className="text-blue-400" />} label="Timezone" value={srv.timezone} />
+            <InfoTile icon={<LucideGlobe size={16} className="text-[#E8B15A]" />} label="Timezone" value={srv.timezone} />
           )}
         </div>
       )}
@@ -727,7 +727,7 @@ function XtreamManager() {
     }
   };
 
-  const field = 'w-full bg-[#0a1f22] border border-gray-600 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow';
+  const field = 'w-full bg-black/40 border border-[var(--hairline)] rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-[#E8B15A]/70 transition-shadow';
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -774,7 +774,7 @@ function XtreamManager() {
             className={`px-6 py-2.5 rounded-lg font-medium transition-all ${
               !canSubmit
                 ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20'
+                : 'u-pill-active shadow-lg'
             }`}
           >
             {isProcessing ? 'Connecting...' : 'Sign In & Import'}
@@ -816,14 +816,14 @@ function MediaDiagnostics() {
       </div>
       
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-white/5 p-4 rounded-lg border border-blue-500/20">
+        <div className="bg-white/5 p-4 rounded-lg border border-[#E8B15A]/20">
           <div className="text-sm text-gray-400 mb-1">Live TV</div>
-          <div className="text-2xl font-bold text-blue-400">{liveCount}</div>
+          <div className="text-2xl font-bold text-[#E8B15A]">{liveCount}</div>
         </div>
         
-        <div className="bg-white/5 p-4 rounded-lg border border-purple-500/20">
+        <div className="bg-white/5 p-4 rounded-lg border border-[#A1A1AA]/15">
           <div className="text-sm text-gray-400 mb-1">Movies</div>
-          <div className="text-2xl font-bold text-purple-400">{moviesCount}</div>
+          <div className="text-2xl font-bold text-[#F5F5F7]">{moviesCount}</div>
         </div>
         
         <div className="bg-white/5 p-4 rounded-lg border border-pink-500/20">

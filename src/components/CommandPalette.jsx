@@ -6,9 +6,9 @@ import { LucideSearch, LucideTv, LucideFilm, LucideListVideo, LucideCornerDownLe
 const MAX_RESULTS = 18;
 
 const TYPE_META = {
-  live: { icon: LucideTv, label: 'Live', color: 'text-teal-400' },
-  movie: { icon: LucideFilm, label: 'Movie', color: 'text-purple-400' },
-  series: { icon: LucideListVideo, label: 'Series', color: 'text-pink-400' },
+  live: { icon: LucideTv, label: 'Live', color: 'text-[#E8B15A]' },
+  movie: { icon: LucideFilm, label: 'Movie', color: 'text-[#E8B15A]' },
+  series: { icon: LucideListVideo, label: 'Series', color: 'text-[#E8B15A]' },
 };
 
 /**
@@ -86,7 +86,7 @@ export default function CommandPalette({ isOpen, onClose }) {
     <div className="fixed inset-0 z-[70] flex items-start justify-center pt-[12vh]" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
       <div
-        className="relative w-[640px] max-w-[90vw] bg-[#0e1c1f] border border-white/15 rounded-2xl shadow-2xl overflow-hidden"
+        className="relative w-[640px] max-w-[90vw] u-glass rounded-2xl shadow-[0_40px_100px_-20px_rgba(0,0,0,0.9)] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 px-5 py-4 border-b border-white/10">
@@ -113,8 +113,8 @@ export default function CommandPalette({ isOpen, onClose }) {
                 key={`${r.type}-${r.item.id}-${i}`}
                 onClick={() => play(r)}
                 onMouseEnter={() => setSelected(i)}
-                className={`flex items-center gap-3 px-5 py-3 cursor-pointer ${
-                  i === selected ? 'bg-teal-700/40' : ''
+                className={`flex items-center gap-3 px-5 py-3 cursor-pointer border-l-2 transition-colors ${
+                  i === selected ? 'bg-[#E8B15A]/[0.12] border-[#E8B15A]' : 'border-transparent'
                 }`}
               >
                 <div className="w-9 h-9 rounded bg-black/50 flex items-center justify-center shrink-0 p-1">

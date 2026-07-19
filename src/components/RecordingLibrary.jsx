@@ -74,7 +74,7 @@ export default function RecordingLibrary() {
         {items.map((rec, index) => (
           <div
             key={rec.id}
-            className="group relative bg-[#111827] border border-white/10 rounded-xl overflow-hidden focus-within:border-sky-400"
+            className="group relative bg-[#17171B] border border-[var(--hairline)] rounded-xl overflow-hidden focus-within:border-[#E8B15A]/60"
             data-nav-zone="recordings-library"
             data-nav-index={index}
           >
@@ -91,7 +91,7 @@ export default function RecordingLibrary() {
               <div className="flex gap-2 mt-3">
                 <button
                   onClick={() => play(rec)}
-                  className="flex-1 text-xs font-semibold py-1.5 rounded-lg bg-sky-600/20 text-sky-300 border border-sky-500/30 hover:bg-sky-600/30 focus:outline-none"
+                  className="flex-1 text-xs font-semibold py-1.5 rounded-lg bg-[#E8B15A]/15 text-[#F0C27B] border border-[#E8B15A]/30 hover:bg-[#E8B15A]/25 focus:outline-none"
                 >▶ Play</button>
                 <button
                   onClick={() => setConfirmId(rec.id)}

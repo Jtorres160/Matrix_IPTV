@@ -205,7 +205,7 @@ export default function PlayerControls() {
                 }`}
               >
                 {showLocked
-                  ? <LucideLock size={18} className="text-amber-400" />
+                  ? <LucideLock size={18} className="text-[#E8B15A]" />
                   : isRecording
                     ? <LucideSquare size={20} className="fill-red-500" />
                     : <LucideCircle size={22} className="fill-red-500 text-red-500" />}

@@ -105,10 +105,10 @@ export default function ParentalLockOverlay({ onUnlock, onCancel, mode: explicit
           transition: transform 0.2s cubic-bezier(0.33, 1, 0.68, 1), background-color 0.2s, box-shadow 0.2s;
         }
         .pin-key.active-focused {
-          background-color: #00e5ff !important;
-          color: #000 !important;
+          background-color: #E8B15A !important;
+          color: #141310 !important;
           transform: scale(1.1);
-          box-shadow: 0 0 20px rgba(0, 229, 255, 0.4);
+          box-shadow: 0 0 24px rgba(232, 177, 90, 0.45);
           z-index: 10;
         }
       `}</style>
@@ -127,12 +127,12 @@ export default function ParentalLockOverlay({ onUnlock, onCancel, mode: explicit
           <div key={i} style={{
             width: '70px', height: '90px',
             backgroundColor: 'rgba(255,255,255,0.05)',
-            border: `2px solid ${pin.length === i ? '#00e5ff' : 'rgba(255,255,255,0.1)'}`,
+            border: `2px solid ${pin.length === i ? '#E8B15A' : 'rgba(255,255,255,0.1)'}`,
             borderRadius: '12px',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: '3rem', fontWeight: 'bold', color: '#fff',
             transition: 'border-color 0.2s',
-            boxShadow: pin.length === i ? '0 0 15px rgba(0,229,255,0.2)' : 'none'
+            boxShadow: pin.length === i ? '0 0 15px rgba(232,177,90,0.25)' : 'none'
           }}>
             {pin[i] ? '•' : ''}
           </div>

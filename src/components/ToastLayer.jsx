@@ -11,7 +11,7 @@ export default function ToastLayer() {
     <div className="fixed top-8 right-8 z-[40] flex flex-col gap-3 pointer-events-none">
       {toasts.map((toast) => {
         let Icon = Info;
-        let colorClass = 'border-blue-500 text-blue-400';
+        let colorClass = 'border-[#E8B15A] text-[#E8B15A]';
         
         if (toast.type === 'error') {
           Icon = XCircle;
