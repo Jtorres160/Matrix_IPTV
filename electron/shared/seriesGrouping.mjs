@@ -15,8 +15,16 @@ const EP_RE = /^(.*?)[\s._\-]*(?:[Ss](\d{1,2})[\s._\-]*[Ee](\d{1,2})|(\d{1,2})x(
 const SPELLED_RE = /^(.*?)[\s._\-]*season[\s._\-]*(\d{1,2})[\s._\-]*(?:episode|ep\.?)[\s._\-]*(\d{1,3})(.*)$/i;
 
 function cleanTitle(s) {
-  return (s || '')
-    .replace(/[._]+/g, ' ')
+  let str = (s || '').trim();
+  // Dots/underscores are word separators ONLY in filename-style labels
+  // ("The.Office.S01E01"). A natural title with spaces keeps its punctuation —
+  // "American Manhunt: O.J. Simpson" must not become "O J Simpson".
+  if (!/\s/.test(str)) {
+    str = str.replace(/[._]+/g, ' ');
+  } else {
+    str = str.replace(/_+/g, ' ');
+  }
+  return str
     .replace(/\s*[-–—:]\s*$/, '')
     .replace(/^\s*[-–—:]\s*/, '')
     .replace(/\s+/g, ' ')
@@ -105,6 +113,28 @@ export function groupSeries(items) {
   }
 
   return [...shows.values()].sort((a, b) => a.show.localeCompare(b.show));
+}
+
+/**
+ * Category for a series entry. Providers that set group-title to the show's
+ * own name (one "category" per show) would explode the Series view into a
+ * row per show — collapse those into alphabetical "TV Shows · A" … buckets
+ * so the view stays a handful of browsable rows. A real genre/category group
+ * ("Netflix - Serie", "Drama") passes through untouched.
+ */
+export function seriesCategory(groupTitle, showName) {
+  const g = (groupTitle || '').trim();
+  const s = (showName || '').trim();
+  // Punctuation-insensitive compare: the parsed show name may have had
+  // filename dots stripped while the group-title kept them (or vice versa).
+  const fold = (x) => x.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  if (g && (!s || fold(g) !== fold(s))) return g;
+
+  const basis = s || g;
+  const first = fold(basis).charAt(0).toUpperCase();
+  const letter = /[A-Z]/.test(first) ? first : '#';
+  return `TV Shows · ${letter}`;
 }
 
 /** A compact "S01·E02" style label for an episode. */

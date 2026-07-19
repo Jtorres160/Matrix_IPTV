@@ -806,6 +806,7 @@ function getSeriesCategories(playlistId) {
 function insertSeriesEpisodesBatch(playlistId, episodes, chunkSize = 500) {
   _ensureDB();
   let inserted = 0;
+  let totalSkipped = 0;
   for (let i = 0; i < episodes.length; i += chunkSize) {
     const chunk = episodes.slice(i, i + chunkSize);
     const txn = db.transaction((rows) => {
@@ -828,13 +829,16 @@ function insertSeriesEpisodesBatch(playlistId, episodes, chunkSize = 500) {
           group_title: ep.group_title || null,
         });
       }
-      if (skipped > 0) {
-        console.warn(`[DB] Skipped ${skipped} series episodes with no stream_url.`);
-      }
       return skipped;
     });
     const skipped = txn(chunk);
+    totalSkipped += skipped;
     inserted += chunk.length - skipped;
+  }
+  // Log once per call, not once per chunk, so a big playlist with a few
+  // URL-less episodes doesn't spam the log with a warning per 500-row chunk.
+  if (totalSkipped > 0) {
+    console.warn(`[DB] Skipped ${totalSkipped} series episodes with no stream_url.`);
   }
   return { inserted };
 }
@@ -842,6 +846,40 @@ function insertSeriesEpisodesBatch(playlistId, episodes, chunkSize = 500) {
 function clearPlaylistSeriesEpisodes(playlistId) {
   _ensureDB();
   return stmts.clearPlaylistSeriesEpisodes.run(playlistId);
+}
+
+/**
+ * Atomically replaces all four M3U media tables (channels, vod_streams, series,
+ * series_episodes) for a playlist. Each table is cleared then re-inserted; the
+ * whole thing runs in a single transaction so a mid-sync failure rolls every
+ * table back to its pre-sync state instead of leaving, say, channels updated
+ * but series stale.
+ *
+ * @param {string} playlistId
+ * @param {{liveChannels:Array, vodRows:Array, seriesRows:Array, episodeRows:Array}} routed
+ * @returns {{inserted:number, insertedVOD:number, insertedSeries:number, insertedEpisodes:number}}
+ */
+function syncPlaylistMediaTables(playlistId, routed) {
+  _ensureDB();
+  // One transaction across all four tables. The per-chunk batch inserts create
+  // their own nested transactions, which better-sqlite3 promotes to SAVEPOINTs,
+  // so a throw at any stage rolls the entire replace back.
+  const run = db.transaction(() => {
+    clearPlaylistChannels(playlistId);
+    const inserted = insertChannelsBatch(playlistId, routed.liveChannels).inserted;
+
+    clearPlaylistVODs(playlistId);
+    const insertedVOD = insertVODBatch(playlistId, routed.vodRows).inserted;
+
+    clearPlaylistSeries(playlistId);
+    const insertedSeries = insertSeriesBatch(playlistId, routed.seriesRows).inserted;
+
+    clearPlaylistSeriesEpisodes(playlistId);
+    const insertedEpisodes = insertSeriesEpisodesBatch(playlistId, routed.episodeRows).inserted;
+
+    return { inserted, insertedVOD, insertedSeries, insertedEpisodes };
+  });
+  return run();
 }
 
 function getSeriesEpisodes(playlistId, seriesKey) {
@@ -989,6 +1027,7 @@ module.exports = {
   getSeriesCategories,
   insertSeriesEpisodesBatch,
   clearPlaylistSeriesEpisodes,
+  syncPlaylistMediaTables,
   getSeriesEpisodes,
   getSeriesEpisodesByCategory,
   getMediaStats,

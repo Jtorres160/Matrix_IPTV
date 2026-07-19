@@ -6,7 +6,15 @@
  * stable across resyncs, independent of insertion order.
  */
 
-/** djb2 hash, unsigned, fixed-width hex. */
+/**
+ * djb2 hash, unsigned, fixed-width 32-bit hex.
+ *
+ * NOTE: 32 bits gives a ~50% birthday-collision probability around ~77k
+ * distinct inputs. For a very large VOD catalog (hundreds of thousands of
+ * distinct stream URLs) two movies could hash to the same stream_id and merge.
+ * No crash, but data loss. If catalogs grow that large, widen this to a 64-bit
+ * hash (and bump the m3uStreamId / m3uSeriesKey width accordingly).
+ */
 export function contentHash(str) {
   let h = 5381;
   const s = String(str || '');

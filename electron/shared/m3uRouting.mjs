@@ -7,7 +7,7 @@
  */
 
 import { classifyMedia } from './mediaClassifier.mjs';
-import { parseEpisode } from './seriesGrouping.mjs';
+import { parseEpisode, seriesCategory } from './seriesGrouping.mjs';
 import { m3uStreamId, m3uSeriesKey } from './mediaKeys.mjs';
 
 // Same threshold toMediaItem (renderer) uses to demote weak guesses to
@@ -46,6 +46,9 @@ export function routeM3UItems(parsedChannels) {
       const parsed = parseEpisode(ch.name);
       const show = parsed ? parsed.show : (ch.name || 'Unknown Show');
       const key = m3uSeriesKey(show);
+      // Providers that put the show's own name in group-title would create a
+      // category per show — collapse those into one "TV Shows" category.
+      const category = seriesCategory(ch.group_title, show) || 'Uncategorized';
 
       if (!seriesRowsByKey.has(key)) {
         seriesRowsByKey.set(key, {
@@ -54,7 +57,7 @@ export function routeM3UItems(parsedChannels) {
           cover: ch.logo || null,
           plot: null,
           category_id: null,
-          group_title: ch.group_title || 'Uncategorized',
+          group_title: category,
           rating: 0,
           releaseDate: null,
         });
@@ -70,7 +73,7 @@ export function routeM3UItems(parsedChannels) {
         title: parsed ? parsed.epTitle : '',
         stream_url: ch.stream_url,
         logo: ch.logo || null,
-        group_title: ch.group_title || 'Uncategorized',
+        group_title: category,
       });
       continue;
     }

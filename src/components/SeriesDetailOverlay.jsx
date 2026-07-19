@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useActiveProfile, useProfilesStore } from '../store/profileStore';
 import { playSeriesEpisode } from '../lib/media/mediaResolver.js';
 import { episodeLabel } from '../lib/media/seriesGrouping.js';
-import { LucidePlay, LucideCheck, LucideX, LucideChevronRight } from 'lucide-react';
+import { LucidePlay, LucideCheck, LucideX, LucideChevronRight, LucideLayers } from 'lucide-react';
 
 /**
  * Show → Seasons → Episodes detail for a grouped series.
@@ -98,28 +98,47 @@ export default function SeriesDetailOverlay({ show, onClose }) {
 
   return (
     <div className="absolute inset-0 z-[100] bg-[#0B0B0D] flex flex-col" data-series-overlay>
-      {/* Backdrop */}
-      {show.poster && (
+      {/* Backdrop: poster wash when we have art, warm gold glow when we don't */}
+      {show.poster ? (
         <div className="absolute inset-0 opacity-20 blur-2xl" style={{ backgroundImage: `url(${show.poster})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+      ) : (
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 70% 45% at 28% 0%, rgba(232,177,90,0.10), transparent 60%)' }} />
       )}
       <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0D] via-[#0B0B0D]/80 to-[#0B0B0D]/40" />
 
-      <div className="relative z-10 flex-1 flex flex-col p-8 min-h-0">
+      <div className="relative z-10 flex-1 flex flex-col p-8 min-h-0 w-full max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-start justify-between mb-6 shrink-0">
           <div className="flex gap-6">
-            <div className="w-28 h-40 rounded-lg overflow-hidden bg-black/50 border border-white/10 shrink-0 flex items-center justify-center">
-              {show.poster
-                ? <img src={show.poster} alt={show.show} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
-                : <span className="text-gray-600 text-xs px-2 text-center">{show.show}</span>}
+            <div className="w-32 h-48 rounded-xl overflow-hidden bg-gradient-to-b from-white/[0.07] to-black/40 border border-white/10 shadow-2xl shrink-0 flex flex-col items-center justify-center gap-3 p-3 text-center">
+              {show.poster ? (
+                <img src={show.poster} alt={show.show} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+              ) : (
+                <>
+                  <span className="w-11 h-11 rounded-xl flex items-center justify-center bg-[#E8B15A]/15 border border-[#E8B15A]/25 text-[#E8B15A]">
+                    <LucideLayers size={22} />
+                  </span>
+                  <span className="text-gray-300 text-[11px] leading-snug font-medium line-clamp-4">{show.show}</span>
+                </>
+              )}
             </div>
-            <div>
-              <h1 className="text-4xl font-black text-white drop-shadow-lg">{show.show}</h1>
-              <p className="text-gray-400 mt-2">
-                {seasonNumbers.length} season{seasonNumbers.length === 1 ? '' : 's'} · {show.episodeCount} episode{show.episodeCount === 1 ? '' : 's'}
-              </p>
+            <div className="pt-1">
+              <h1 className="text-4xl font-black text-white drop-shadow-lg tracking-tight">{show.show}</h1>
+              <div className="flex items-center gap-2 mt-3">
+                <span className="px-2.5 py-1 rounded-md bg-white/[0.07] border border-white/10 text-gray-300 text-xs font-medium">
+                  {seasonNumbers.length} season{seasonNumbers.length === 1 ? '' : 's'}
+                </span>
+                <span className="px-2.5 py-1 rounded-md bg-white/[0.07] border border-white/10 text-gray-300 text-xs font-medium">
+                  {show.episodeCount} episode{show.episodeCount === 1 ? '' : 's'}
+                </span>
+                {show.group && (
+                  <span className="px-2.5 py-1 rounded-md bg-[#E8B15A]/10 border border-[#E8B15A]/20 text-[#E8B15A] text-xs font-medium">
+                    {show.group}
+                  </span>
+                )}
+              </div>
               {nextUp && (
-                <p className="text-[#E8B15A] mt-1 text-sm">Up next · {episodeLabel(nextUp)}{nextUp._epTitle ? ` · ${nextUp._epTitle}` : ''}</p>
+                <p className="text-[#E8B15A] mt-3 text-sm">Up next · {episodeLabel(nextUp)}{nextUp._epTitle ? ` · ${nextUp._epTitle}` : ''}</p>
               )}
             </div>
           </div>
@@ -146,16 +165,22 @@ export default function SeriesDetailOverlay({ show, onClose }) {
                 );
               }
               const active = item.season === selectedSeason;
+              const count = (show.seasons.get(item.season) || []).length;
               return (
                 <button
                   key={`s${item.season}`}
                   onClick={() => { setSelectedSeason(item.season); setRightIdx(0); setPane('right'); }}
-                  className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium ${
-                    active ? 'bg-white/15 text-white' : 'text-gray-300 hover:bg-white/5'
+                  className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium border transition-colors ${
+                    active
+                      ? 'bg-white/[0.12] border-[#E8B15A]/30 text-white'
+                      : 'border-transparent text-gray-300 hover:bg-white/5'
                   } ${focused ? focusRing : ''}`}
                 >
-                  Season {item.season}
-                  <LucideChevronRight size={14} className="opacity-60" />
+                  <span>Season {item.season}</span>
+                  <span className="flex items-center gap-2">
+                    <span className={`text-[11px] tabular-nums ${active ? 'text-[#E8B15A]' : 'text-gray-500'}`}>{count} ep</span>
+                    <LucideChevronRight size={14} className="opacity-60" />
+                  </span>
                 </button>
               );
             })}
@@ -170,14 +195,28 @@ export default function SeriesDetailOverlay({ show, onClose }) {
                 <button
                   key={ep.id || i}
                   onClick={() => startEpisode(ep)}
-                  className={`w-full flex items-center gap-4 px-4 py-3 rounded-lg text-left ${
-                    focused ? `bg-white/10 ${focusRing}` : 'bg-white/5 hover:bg-white/10'
+                  className={`group w-full flex items-center gap-4 px-4 py-3 rounded-xl text-left border transition-colors ${
+                    focused
+                      ? `bg-[#E8B15A]/[0.08] border-[#E8B15A]/30 ${focusRing}`
+                      : 'bg-white/[0.04] border-white/[0.06] hover:bg-white/[0.08] hover:border-white/10'
                   }`}
                 >
-                  <span className="w-14 shrink-0 font-mono text-xs text-[#E8B15A] tabular-nums">{episodeLabel(ep)}</span>
-                  <span className="flex-1 min-w-0 truncate text-sm text-gray-100">{ep._epTitle || ep.name}</span>
-                  {watched && <LucideCheck size={16} className="text-[#E8B15A] shrink-0" title="Watched" />}
-                  <LucidePlay size={16} className="text-gray-400 shrink-0" />
+                  <span className="w-16 shrink-0 text-center font-mono text-[11px] tabular-nums px-2 py-1 rounded-md bg-black/40 border border-[#E8B15A]/25 text-[#E8B15A]">
+                    {episodeLabel(ep)}
+                  </span>
+                  <span className={`flex-1 min-w-0 truncate text-sm ${watched ? 'text-gray-400' : 'text-gray-100'}`}>
+                    {ep._epTitle || ep.name}
+                  </span>
+                  {watched && (
+                    <span className="flex items-center gap-1 text-[#E8B15A] text-[11px] font-medium shrink-0">
+                      <LucideCheck size={14} /> Watched
+                    </span>
+                  )}
+                  <span className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                    focused ? 'bg-[#E8B15A] text-black' : 'bg-white/[0.06] text-gray-400 group-hover:bg-[#E8B15A] group-hover:text-black'
+                  }`}>
+                    <LucidePlay size={14} fill="currentColor" />
+                  </span>
                 </button>
               );
             })}

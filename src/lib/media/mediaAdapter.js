@@ -6,6 +6,7 @@
  */
 
 import { classifyMedia } from './mediaClassifier.js';
+import { parseEpisode, seriesCategory } from './seriesGrouping.js';
 
 /**
  * Normalizes a raw media object into a standard MediaItem shape.
@@ -32,10 +33,22 @@ export function toMediaItem(raw, playlistId) {
 
   // Groups: keep the renderer's array shape as source of truth. DB rows only
   // have a flat group string, so wrap it.
-  const groups = Array.isArray(raw.groups) && raw.groups.length > 0
+  let groups = Array.isArray(raw.groups) && raw.groups.length > 0
     ? raw.groups
     : [raw.group_title || raw.group || raw.groupTitle || 'Uncategorized'].filter(Boolean);
-  const group = groups[0] || 'Uncategorized';
+  let group = groups[0] || 'Uncategorized';
+
+  // Series whose group-title is the show's own name (one category per show)
+  // collapse into a single "TV Shows" category — mirrors m3uRouting so the
+  // renderer store path and the SQLite path agree on category names.
+  if (type === 'series') {
+    const parsed = parseEpisode(title);
+    const collapsed = seriesCategory(group, parsed ? parsed.show : null);
+    if (collapsed !== group) {
+      group = collapsed;
+      groups = [collapsed];
+    }
+  }
 
   const tvgId = raw.tvgId || raw.tvg_id || null;
   const logo = raw.logo || raw.stream_icon || null;

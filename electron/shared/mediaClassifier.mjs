@@ -37,6 +37,18 @@ export function classifyMedia(row) {
   if (row.stream_type === 'movie') return { type: 'movie', confidence: 1.0 };
   if (row.stream_type === 'series') return { type: 'series', confidence: 1.0 };
 
+  // 1b. Explicit tvg-type attribute from the M3U (#EXTINF tvg-type="...").
+  //     Providers that label their entries are authoritative — no guessing.
+  const tvgType = normalize(row.tvg_type || row.tvgType || '');
+  if (tvgType === 'live') return { type: 'live', confidence: 1.0 };
+  if (tvgType === 'movie' || tvgType === 'movies' || tvgType === 'vod') {
+    return { type: 'movie', confidence: 1.0 };
+  }
+  if (tvgType === 'tvshow' || tvgType === 'tvshows' || tvgType === 'series' ||
+      tvgType === 'show' || tvgType === 'shows') {
+    return { type: 'series', confidence: 1.0 };
+  }
+
   const groupTitle = normalize(row.group_title || row.group || row.groupTitle || '');
   const url = normalize(row.stream_url || row.url || '');
   const name = normalize(row.name || row.title || '');
@@ -68,7 +80,10 @@ export function classifyMedia(row) {
   }
 
   // 4. Movie by video-file extension (now that series files are excluded).
-  if (MOVIE_EXTENSIONS.some(ext => url.includes(ext))) {
+  //    Anchored to the END of the URL path — a substring test turned live
+  //    channel slugs like "fox.movies.rs.m3u8" into movies via ".mov".
+  const urlPath = url.split(/[?#]/)[0];
+  if (MOVIE_EXTENSIONS.some(ext => urlPath.endsWith(ext))) {
     return { type: 'movie', confidence: 0.95 };
   }
 
