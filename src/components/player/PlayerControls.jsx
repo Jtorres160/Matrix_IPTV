@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LucideMaximize, LucideMinimize, LucideVolume2, LucideVolumeX, LucidePause, LucidePlay, LucideArrowLeft, LucideRatio, LucideSubtitles, LucideCircle, LucideSquare, LucideLock } from 'lucide-react';
+import { LucideMaximize, LucideMinimize, LucideVolume2, LucideVolumeX, LucidePause, LucidePlay, LucideArrowLeft, LucideRatio, LucideSubtitles, LucideCircle, LucideSquare, LucideLock, LucideRotateCcw, LucideRotateCw, LucideSkipForward } from 'lucide-react';
 import { usePlayerStore } from '../../player/playerStore.js';
 import { useAppStore } from '../../store/appStore.js';
 import { readTracks, setAudioTrack, setSubtitleTrack } from '../../lib/player/tracks.js';
@@ -39,7 +39,10 @@ export default function PlayerControls() {
     cycleVideoFit,
     setVolume,
     toggleMute,
-    showControlsTemporarily
+    showControlsTemporarily,
+    seriesQueue,
+    seriesIndex,
+    playNextInSeries
   } = usePlayerStore();
   const setCurrentView = useAppStore(s => s.setCurrentView);
   const setIsImmersivePlayer = useAppStore(s => s.setIsImmersivePlayer);
@@ -112,6 +115,11 @@ export default function PlayerControls() {
   if (!showControls || !activeChannel) return null;
 
   const isPlaying = playbackState === 'playing';
+  // Next episode exists only while playing from a series queue.
+  const nextEpisode = seriesIndex >= 0 && seriesIndex < seriesQueue.length - 1
+    ? seriesQueue[seriesIndex + 1]
+    : null;
+  const skipBy = (delta) => seek(Math.max(0, currentTime + delta));
 
   return (
     <div 
@@ -171,12 +179,45 @@ export default function PlayerControls() {
           
           {/* Left Controls */}
           <div className="flex items-center gap-6">
-            <button 
+            {isVOD && (
+              <button
+                onClick={() => skipBy(-10)}
+                title="Rewind 10 seconds"
+                className="relative text-white hover:text-[#F0C27B] transition-colors focus:outline-none"
+              >
+                <LucideRotateCcw size={26} />
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold mt-[3px]">10</span>
+              </button>
+            )}
+
+            <button
               onClick={isPlaying ? pause : play}
               className="text-white hover:text-[#F0C27B] transition-colors focus:outline-none"
             >
               {isPlaying ? <LucidePause size={28} /> : <LucidePlay size={28} />}
             </button>
+
+            {isVOD && (
+              <button
+                onClick={() => skipBy(30)}
+                title="Fast-forward 30 seconds"
+                className="relative text-white hover:text-[#F0C27B] transition-colors focus:outline-none"
+              >
+                <LucideRotateCw size={26} />
+                <span className="absolute inset-0 flex items-center justify-center text-[8px] font-bold mt-[3px]">30</span>
+              </button>
+            )}
+
+            {nextEpisode && (
+              <button
+                onClick={() => { playNextInSeries(); showControlsTemporarily(); }}
+                title={`Next: ${nextEpisode.name || 'next episode'}`}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.08] border border-white/15 text-white hover:bg-[#E8B15A]/20 hover:border-[#E8B15A]/40 hover:text-[#F0C27B] transition-colors focus:outline-none"
+              >
+                <LucideSkipForward size={20} />
+                <span className="text-xs font-semibold uppercase tracking-wide">Next Ep</span>
+              </button>
+            )}
 
             <div className="flex items-center gap-3 group">
               <button 

@@ -91,6 +91,7 @@ export function groupSeries(items) {
         key: showName,
         show: showName,
         poster: item.poster || item.logo || item.cover || null,
+        tvgId: item.tvgId || item.tvg_id || null,
         group: item.group || 'Series',
         seasons: new Map(),
         episodes: [],
@@ -98,6 +99,7 @@ export function groupSeries(items) {
     }
     const showObj = shows.get(showName);
     if (!showObj.poster) showObj.poster = item.poster || item.logo || item.cover || null;
+    if (!showObj.tvgId) showObj.tvgId = item.tvgId || item.tvg_id || null;
 
     const epObj = { ...item, _season: season, _episode: episode, _epTitle: parsed ? parsed.epTitle : '' };
     showObj.episodes.push(epObj);

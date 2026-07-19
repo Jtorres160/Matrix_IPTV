@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useActiveProfile, useProfilesStore } from '../store/profileStore';
 import { playSeriesEpisode } from '../lib/media/mediaResolver.js';
 import { episodeLabel } from '../lib/media/seriesGrouping.js';
+import { getMeta, isImdbId, posterUrlFor, backgroundUrlFor } from '../lib/media/metaService.js';
 import { LucidePlay, LucideCheck, LucideX, LucideChevronRight, LucideLayers } from 'lucide-react';
 
 /**
@@ -16,6 +17,19 @@ import { LucidePlay, LucideCheck, LucideX, LucideChevronRight, LucideLayers } fr
 export default function SeriesDetailOverlay({ show, onClose }) {
   const activeProfile = useActiveProfile();
   const addRecentlyWatched = useProfilesStore((s) => s.addRecentlyWatched);
+
+  // Keyless enrichment for shows whose provider keys them by IMDb id.
+  const [meta, setMeta] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    if (isImdbId(show.tvgId)) {
+      getMeta(show.tvgId, 'series').then((m) => { if (alive && m) setMeta(m); });
+    }
+    return () => { alive = false; };
+  }, [show.tvgId]);
+
+  const poster = show.poster || meta?.poster || posterUrlFor(show.tvgId, 'medium');
+  const backdrop = meta?.background || backgroundUrlFor(show.tvgId);
 
   // Set of episode ids the user has already watched (best-effort across the
   // profile's history shapes).
@@ -98,9 +112,9 @@ export default function SeriesDetailOverlay({ show, onClose }) {
 
   return (
     <div className="absolute inset-0 z-[100] bg-[#0B0B0D] flex flex-col" data-series-overlay>
-      {/* Backdrop: poster wash when we have art, warm gold glow when we don't */}
-      {show.poster ? (
-        <div className="absolute inset-0 opacity-20 blur-2xl" style={{ backgroundImage: `url(${show.poster})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+      {/* Backdrop: wide show art when we have it, warm gold glow when we don't */}
+      {(backdrop || poster) ? (
+        <div className="absolute inset-0 opacity-25 blur-xl" style={{ backgroundImage: `url(${backdrop || poster})`, backgroundSize: 'cover', backgroundPosition: 'center 20%' }} />
       ) : (
         <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 70% 45% at 28% 0%, rgba(232,177,90,0.10), transparent 60%)' }} />
       )}
@@ -111,8 +125,8 @@ export default function SeriesDetailOverlay({ show, onClose }) {
         <div className="flex items-start justify-between mb-6 shrink-0">
           <div className="flex gap-6">
             <div className="w-32 h-48 rounded-xl overflow-hidden bg-gradient-to-b from-white/[0.07] to-black/40 border border-white/10 shadow-2xl shrink-0 flex flex-col items-center justify-center gap-3 p-3 text-center">
-              {show.poster ? (
-                <img src={show.poster} alt={show.show} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+              {poster ? (
+                <img src={poster} alt={show.show} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
               ) : (
                 <>
                   <span className="w-11 h-11 rounded-xl flex items-center justify-center bg-[#E8B15A]/15 border border-[#E8B15A]/25 text-[#E8B15A]">
@@ -131,12 +145,25 @@ export default function SeriesDetailOverlay({ show, onClose }) {
                 <span className="px-2.5 py-1 rounded-md bg-white/[0.07] border border-white/10 text-gray-300 text-xs font-medium">
                   {show.episodeCount} episode{show.episodeCount === 1 ? '' : 's'}
                 </span>
-                {show.group && (
+                {meta?.imdbRating && (
+                  <span className="px-2.5 py-1 rounded-md bg-[#E8B15A]/10 border border-[#E8B15A]/20 text-[#E8B15A] text-xs font-semibold">
+                    ★ {meta.imdbRating}
+                  </span>
+                )}
+                {(meta?.genres || []).slice(0, 3).map((g) => (
+                  <span key={g} className="px-2.5 py-1 rounded-md bg-white/[0.07] border border-white/10 text-gray-300 text-xs font-medium">
+                    {g}
+                  </span>
+                ))}
+                {!meta && show.group && (
                   <span className="px-2.5 py-1 rounded-md bg-[#E8B15A]/10 border border-[#E8B15A]/20 text-[#E8B15A] text-xs font-medium">
                     {show.group}
                   </span>
                 )}
               </div>
+              {meta?.description && (
+                <p className="text-gray-300 mt-3 text-sm leading-relaxed max-w-2xl line-clamp-3">{meta.description}</p>
+              )}
               {nextUp && (
                 <p className="text-[#E8B15A] mt-3 text-sm">Up next · {episodeLabel(nextUp)}{nextUp._epTitle ? ` · ${nextUp._epTitle}` : ''}</p>
               )}

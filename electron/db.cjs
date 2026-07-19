@@ -112,6 +112,7 @@ const SCHEMA_SQL = `
     added TEXT,
     container_extension TEXT,
     stream_url TEXT,
+    tvg_id TEXT,
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
   );
 
@@ -126,6 +127,7 @@ const SCHEMA_SQL = `
     group_title TEXT,
     rating REAL,
     releaseDate TEXT,
+    tvg_id TEXT,
     FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
   );
 
@@ -376,8 +378,8 @@ function _prepareStatements() {
 
   // ── VOD and Series Queries ───────────────────────────────────────────────
   stmts.insertVOD = db.prepare(`
-    INSERT INTO vod_streams (playlist_id, stream_id, name, stream_icon, category_id, group_title, rating, added, container_extension, stream_url)
-    VALUES (@playlist_id, @stream_id, @name, @stream_icon, @category_id, @group_title, @rating, @added, @container_extension, @stream_url)
+    INSERT INTO vod_streams (playlist_id, stream_id, name, stream_icon, category_id, group_title, rating, added, container_extension, stream_url, tvg_id)
+    VALUES (@playlist_id, @stream_id, @name, @stream_icon, @category_id, @group_title, @rating, @added, @container_extension, @stream_url, @tvg_id)
   `);
 
   stmts.clearPlaylistVODs = db.prepare(`
@@ -392,9 +394,26 @@ function _prepareStatements() {
     SELECT DISTINCT group_title FROM vod_streams WHERE playlist_id = ? AND group_title IS NOT NULL AND group_title != '' ORDER BY group_title ASC
   `);
 
+  // A–Z browsing: bucket by first character of the title (non-letters → '#').
+  stmts.getVODInitials = db.prepare(`
+    SELECT CASE WHEN upper(substr(trim(name), 1, 1)) BETWEEN 'A' AND 'Z'
+                THEN upper(substr(trim(name), 1, 1)) ELSE '#' END AS letter,
+           COUNT(*) AS count
+    FROM vod_streams WHERE playlist_id = ?
+    GROUP BY letter ORDER BY letter ASC
+  `);
+
+  stmts.getVODsByInitial = db.prepare(`
+    SELECT * FROM vod_streams
+    WHERE playlist_id = ?
+      AND (CASE WHEN upper(substr(trim(name), 1, 1)) BETWEEN 'A' AND 'Z'
+                THEN upper(substr(trim(name), 1, 1)) ELSE '#' END) = ?
+    ORDER BY name COLLATE NOCASE ASC LIMIT ? OFFSET ?
+  `);
+
   stmts.insertSeries = db.prepare(`
-    INSERT INTO series (playlist_id, series_id, name, cover, plot, category_id, group_title, rating, releaseDate)
-    VALUES (@playlist_id, @series_id, @name, @cover, @plot, @category_id, @group_title, @rating, @releaseDate)
+    INSERT INTO series (playlist_id, series_id, name, cover, plot, category_id, group_title, rating, releaseDate, tvg_id)
+    VALUES (@playlist_id, @series_id, @name, @cover, @plot, @category_id, @group_title, @rating, @releaseDate, @tvg_id)
   `);
 
   stmts.clearPlaylistSeries = db.prepare(`
@@ -738,6 +757,7 @@ function insertVODBatch(playlistId, vods, chunkSize = 500) {
           added: vod.added || null,
           container_extension: vod.container_extension || null,
           stream_url: vod.stream_url || null,
+          tvg_id: vod.tvg_id || null,
         });
       }
     });
@@ -755,6 +775,16 @@ function clearPlaylistVODs(playlistId) {
 function getVODsByCategory(playlistId, groupTitle, limit = 200, offset = 0) {
   _ensureDB();
   return stmts.getVODsByCategory.all(playlistId, groupTitle, limit, offset);
+}
+
+function getVODInitials(playlistId) {
+  _ensureDB();
+  return stmts.getVODInitials.all(playlistId);
+}
+
+function getVODsByInitial(playlistId, letter, limit = 200, offset = 0) {
+  _ensureDB();
+  return stmts.getVODsByInitial.all(playlistId, letter, limit, offset);
 }
 
 function getVODCategories(playlistId) {
@@ -778,7 +808,8 @@ function insertSeriesBatch(playlistId, seriesList, chunkSize = 500) {
           category_id: s.category_id || null,
           group_title: s.group_title || null,
           rating: s.rating || 0,
-          releaseDate: s.releaseDate || null
+          releaseDate: s.releaseDate || null,
+          tvg_id: s.tvg_id || null,
         });
       }
     });
@@ -1021,6 +1052,8 @@ module.exports = {
   clearPlaylistVODs,
   getVODsByCategory,
   getVODCategories,
+  getVODInitials,
+  getVODsByInitial,
   insertSeriesBatch,
   clearPlaylistSeries,
   getSeriesByCategory,

@@ -1,11 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
 import useKeyboardNavigation from '../hooks/useKeyboardNavigation';
 import { useProfilesStore } from '../store/profileStore';
+import { getMeta, isImdbId, posterUrlFor } from '../lib/media/metaService.js';
 
 export default function VODDetailOverlay({ item, type, onClose, onPlay }) {
   const [metadata, setMetadata] = useState(null);
   const activeSettings = useProfilesStore(s => s.getActiveSettings());
   const tmdbApiKey = activeSettings?.tmdbApiKey;
+  const imdbId = item?.tvg_id || item?.tvgId || null;
+
+  // Keyless enrichment: providers that use IMDb ids as tvg-id get posters,
+  // plot, genres and rating from Cinemeta (cached in IndexedDB).
+  useEffect(() => {
+    let alive = true;
+    if (!isImdbId(imdbId)) return undefined;
+    getMeta(imdbId, type === 'vod' ? 'movie' : 'series').then((m) => {
+      if (!alive || !m) return;
+      setMetadata((prev) => prev || {
+        overview: m.description,
+        backdrop: m.background,
+        poster: m.poster,
+        rating: m.imdbRating,
+        year: m.year,
+        genres: m.genres,
+        cast: m.cast,
+        runtime: m.runtime,
+      });
+    });
+    return () => { alive = false; };
+  }, [imdbId, type]);
 
   // Physical keyboard listener
   useEffect(() => {
@@ -88,7 +111,8 @@ export default function VODDetailOverlay({ item, type, onClose, onPlay }) {
     }
   };
 
-  const posterUrl = (type === 'vod' ? item.stream_icon : item.cover) || item.poster || item.logo || null;
+  const posterUrl = (type === 'vod' ? item.stream_icon : item.cover) || item.poster || item.logo
+    || metadata?.poster || posterUrlFor(imdbId, 'medium');
   const description = metadata?.overview || item.plot || 'No description available.';
   const rating = metadata?.rating || item.rating || 0;
   const backdrop = metadata?.backdrop || posterUrl; // Fallback to poster
@@ -134,9 +158,18 @@ export default function VODDetailOverlay({ item, type, onClose, onPlay }) {
           <div style={styles.metaRow}>
             {metadata?.year && <span style={styles.metaBadge}>{metadata.year}</span>}
             {rating > 0 && <span style={{...styles.metaBadge, color: '#E8B15A', borderColor: 'rgba(232,177,90,0.35)'}}>★ {Number(rating).toFixed(1)}</span>}
+            {metadata?.runtime && <span style={styles.metaBadge}>{metadata.runtime}</span>}
+            {(metadata?.genres || []).slice(0, 3).map((g) => (
+              <span key={g} style={{...styles.metaBadge, fontWeight: 500, color: '#D9D9DE'}}>{g}</span>
+            ))}
             {item.added && <span style={styles.metaBadge}>Added: {new Date(item.added * 1000).toLocaleDateString()}</span>}
           </div>
           <p style={styles.description}>{description}</p>
+          {metadata?.cast?.length > 0 && (
+            <p style={{ color: '#8E8E96', fontSize: '1.05rem', margin: '-24px 0 36px 0' }}>
+              <span style={{ color: '#6B6B73' }}>Starring&nbsp;&nbsp;</span>{metadata.cast.join(' · ')}
+            </p>
+          )}
 
           <div style={styles.actions} data-nav-zone="vod-detail">
             <button 

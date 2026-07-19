@@ -38,6 +38,7 @@ export function routeM3UItems(parsedChannels) {
         added: null,
         container_extension: null,
         stream_url: ch.stream_url,
+        tvg_id: ch.tvg_id || null,
       });
       continue;
     }
@@ -60,9 +61,12 @@ export function routeM3UItems(parsedChannels) {
           group_title: category,
           rating: 0,
           releaseDate: null,
+          tvg_id: ch.tvg_id || null,
         });
-      } else if (!seriesRowsByKey.get(key).cover && ch.logo) {
-        seriesRowsByKey.get(key).cover = ch.logo;
+      } else {
+        const row = seriesRowsByKey.get(key);
+        if (!row.cover && ch.logo) row.cover = ch.logo;
+        if (!row.tvg_id && ch.tvg_id) row.tvg_id = ch.tvg_id;
       }
 
       episodeRows.push({

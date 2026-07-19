@@ -6,7 +6,7 @@
 // current version without duplicate-column errors.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 function columnExists(db, table, column) {
   return db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
@@ -51,6 +51,18 @@ function runMigrations(db) {
         CREATE INDEX IF NOT EXISTS idx_series_episodes_playlist_group
           ON series_episodes(playlist_id, group_title);
       `);
+    }
+    if (from < 2) {
+      // v2 — external metadata identity:
+      //   • tvg_id on vod_streams + series — providers that key entries by an
+      //     IMDb id (tvg-id="tt...") let us enrich posters/plots/genres from
+      //     public metadata APIs. NULL for providers without stable ids.
+      if (!columnExists(db, 'vod_streams', 'tvg_id')) {
+        db.exec(`ALTER TABLE vod_streams ADD COLUMN tvg_id TEXT`);
+      }
+      if (!columnExists(db, 'series', 'tvg_id')) {
+        db.exec(`ALTER TABLE series ADD COLUMN tvg_id TEXT`);
+      }
     }
     db.pragma(`user_version = ${SCHEMA_VERSION}`);
   });

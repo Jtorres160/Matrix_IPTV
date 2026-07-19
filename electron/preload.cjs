@@ -86,6 +86,8 @@ contextBridge.exposeInMainWorld('electronDB', {
   getLockedCategories: (playlistId) => ipcRenderer.invoke('db:getLockedCategories', playlistId),
   getVODsByCategory: (playlistId, groupTitle, limit, offset) => ipcRenderer.invoke('db:getVODsByCategory', playlistId, groupTitle, limit, offset),
   getVODCategories:  (playlistId) => ipcRenderer.invoke('db:getVODCategories', playlistId),
+  getVODInitials:    (playlistId) => ipcRenderer.invoke('db:getVODInitials', playlistId),
+  getVODsByInitial:  (playlistId, letter, limit, offset) => ipcRenderer.invoke('db:getVODsByInitial', playlistId, letter, limit, offset),
   getSeriesByCategory: (playlistId, groupTitle, limit, offset) => ipcRenderer.invoke('db:getSeriesByCategory', playlistId, groupTitle, limit, offset),
   getSeriesCategories: (playlistId) => ipcRenderer.invoke('db:getSeriesCategories', playlistId),
   getSeriesEpisodes: (playlistId, seriesKey) => ipcRenderer.invoke('db:getSeriesEpisodes', playlistId, seriesKey),

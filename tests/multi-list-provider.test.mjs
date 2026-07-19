@@ -82,7 +82,9 @@ const routed = routeM3UItems(mainRows);
 assert.equal(routed.liveChannels.length, 1, 'FOX Movies stays a live channel');
 assert.equal(routed.vodRows.length, 1);
 assert.equal(routed.vodRows[0].name, 'Avatar');
+assert.equal(routed.vodRows[0].tvg_id, 'tt18259538', 'IMDb id survives into vod rows (metadata enrichment key)');
 assert.equal(routed.seriesRows.length, 1);
+assert.equal(routed.seriesRows[0].tvg_id, 'tt8622160', 'IMDb id survives into series rows');
 assert.equal(routed.episodeRows.length, 1);
 assert.deepEqual([routed.episodeRows[0].season, routed.episodeRows[0].episode], [1, 1]);
 // group-title === show name → collapse into an alphabetical bucket

@@ -41,6 +41,7 @@ export default function PlayerPreview({ playerPreference }) {
     setDuration,
     setCurrentTime
   } = usePlayerStore();
+  const seekRequest = usePlayerStore((s) => s.seekRequest);
 
   const [vlcAvailable, setVlcAvailable] = useState(false);
 
@@ -238,6 +239,15 @@ export default function PlayerPreview({ playerPreference }) {
       }
     };
   }, [activeUrl, activeChannel, playerPreference, handleError]);
+
+  // Seekbar / skip buttons: consume store seek requests for the ReactPlayer
+  // path. (MpegtsPlayer consumes its own for recordings — skip those here or
+  // both players would race on the same request.)
+  useEffect(() => {
+    if (seekRequest == null || activeChannel?.isRecording) return;
+    try { playerRef.current?.seekTo?.(seekRequest, 'seconds'); } catch (e) { /* ignore */ }
+    usePlayerStore.getState().clearSeekRequest();
+  }, [seekRequest, activeChannel]);
 
   // --- Continue Watching: resume, persist, and clear playback position ---
 

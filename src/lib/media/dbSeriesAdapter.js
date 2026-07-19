@@ -26,6 +26,7 @@ export function buildShowsFromDbEpisodes(seriesRows, episodeRows, playlistId) {
         key,
         show: (m && m.name) || row.name || 'Unknown Show',
         poster: (m && m.cover) || row.logo || null,
+        tvgId: (m && m.tvg_id) || null,
         group: row.group_title || 'Series',
         seasons: new Map(),
         episodes: [],

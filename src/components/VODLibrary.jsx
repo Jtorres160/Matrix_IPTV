@@ -9,6 +9,7 @@ import { playMediaItem } from '../lib/media/mediaResolver.js';
 import { groupSeries } from '../lib/media/seriesGrouping.js';
 import { buildShowsFromDbEpisodes, fetchAllSeriesEpisodes } from '../lib/media/dbSeriesAdapter.js';
 import { toPlayableVodItem } from '../lib/media/playableItem.js';
+import { posterUrlFor, getMetaMany, isImdbId } from '../lib/media/metaService.js';
 import { LucideFilm, LucidePlay, LucideLayers } from 'lucide-react';
 
 const ROW_HEIGHT = 328;
@@ -22,6 +23,12 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
   
   const [categories, setCategories] = useState([]);
   const [categoryData, setCategoryData] = useState({});
+  // Movies grouping mode: 'provider' (categories as delivered) | 'az' | 'genre'
+  const [grouping, setGrouping] = useState(() =>
+    (typeof localStorage !== 'undefined' && localStorage.getItem('matrix_movie_grouping')) || 'provider');
+  // Genre mode: progressive index built from cached/fetched metadata.
+  const [genreIndex, setGenreIndex] = useState({});       // genre -> vod rows
+  const [genreProgress, setGenreProgress] = useState(null); // {done,total} | null
   // Series-only: per-category DB payload { rows: series[], episodes: series_episodes[] }.
   const [seriesDbData, setSeriesDbData] = useState({});
   const [selectedVOD, setSelectedVOD] = useState(null);
@@ -34,7 +41,91 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
 
   const media = useAppStore((s) => s.media);
 
+  const setGroupingPersist = (mode) => {
+    setGrouping(mode);
+    try { localStorage.setItem('matrix_movie_grouping', mode); } catch { /* noop */ }
+  };
+
+  // ── A–Z mode: letter buckets straight from SQL ─────────────────────────────
   useEffect(() => {
+    if (!isMovies || grouping !== 'az') return;
+    let alive = true;
+    (async () => {
+      if (!activePlaylistId || !window.electronDB?.getVODInitials) { setCategories([]); return; }
+      const initials = (await window.electronDB.getVODInitials(activePlaylistId)) || [];
+      if (!alive) return;
+      const letters = initials.map((r) => r.letter);
+      setCategories(letters);
+      setCategoryData({});
+      const first = letters.slice(0, 5);
+      const entries = await Promise.all(first.map(async (letter) => [
+        letter,
+        (await window.electronDB.getVODsByInitial(activePlaylistId, letter, 50, 0)) || [],
+      ]));
+      if (alive) setCategoryData(Object.fromEntries(entries));
+    })();
+    return () => { alive = false; };
+  }, [activePlaylistId, isMovies, grouping]);
+
+  // ── Genre mode: progressive index over Cinemeta metadata ───────────────────
+  // Rows appear as titles get classified; everything is cached in IndexedDB so
+  // the index builds instantly on later visits.
+  useEffect(() => {
+    if (!isMovies || grouping !== 'genre') { setGenreProgress(null); return; }
+    let alive = true;
+    const ac = new AbortController();
+    (async () => {
+      if (!activePlaylistId || !window.electronDB?.getVODInitials) return;
+      const initials = (await window.electronDB.getVODInitials(activePlaylistId)) || [];
+      if (!alive) return;
+
+      // Pull every movie row (paged per letter) so the index covers the library.
+      const allRows = [];
+      for (const { letter } of initials) {
+        for (let offset = 0; alive; offset += 500) {
+          const page = (await window.electronDB.getVODsByInitial(activePlaylistId, letter, 500, offset)) || [];
+          allRows.push(...page);
+          if (page.length < 500) break;
+        }
+      }
+      if (!alive) return;
+
+      const withIds = allRows.filter((r) => isImdbId(r.tvg_id));
+      const byId = new Map(withIds.map((r) => [r.tvg_id, r]));
+      setGenreProgress({ done: 0, total: withIds.length });
+
+      const index = {};
+      let done = 0;
+      let lastFlush = 0;
+      const flush = () => {
+        const cats = Object.keys(index).sort((a, b) => index[b].length - index[a].length);
+        setCategories(cats);
+        setCategoryData(Object.fromEntries(cats.map((g) => [g, index[g].slice(0, 50)])));
+        setGenreIndex({ ...index });
+      };
+      await getMetaMany(withIds.map((r) => ({ id: r.tvg_id, kind: 'movie' })), {
+        concurrency: 8,
+        signal: ac.signal,
+        onItem: (id, meta) => {
+          done += 1;
+          const row = byId.get(id);
+          for (const g of (meta?.genres || [])) {
+            (index[g] = index[g] || []).push(row);
+          }
+          if (alive && (done - lastFlush >= 50 || done === withIds.length)) {
+            lastFlush = done;
+            flush();
+            setGenreProgress({ done, total: withIds.length });
+          }
+        },
+      });
+      if (alive) { flush(); setGenreProgress({ done: withIds.length, total: withIds.length }); }
+    })();
+    return () => { alive = false; ac.abort(); };
+  }, [activePlaylistId, isMovies, grouping]);
+
+  useEffect(() => {
+    if (isMovies && grouping !== 'provider') return;
     const loadCategories = async () => {
       // 1. Fetch from DB (Xtream / dedicated DB tables) — optional, guarded:
       // electronDB is absent in pure-browser dev and may reject on old schemas.
@@ -104,7 +195,7 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
       setCategoryData(Object.fromEntries(entries));
     };
     loadCategories();
-  }, [activePlaylistId, isMovies, media]);
+  }, [activePlaylistId, isMovies, media, grouping]);
 
   // Series episodes are regrouped into shows only when the underlying data
   // changes, not on every render — groupSeries used to run inline in the
@@ -142,6 +233,16 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
   const loadCategory = useCallback(async (category) => {
     if (categoryData[category]) return;
 
+    // A–Z rows come straight from SQL; genre rows are served by the index.
+    if (isMovies && grouping === 'az') {
+      if (activePlaylistId && window.electronDB?.getVODsByInitial) {
+        const rows = (await window.electronDB.getVODsByInitial(activePlaylistId, category, 50, 0)) || [];
+        setCategoryData((prev) => ({ ...prev, [category]: rows }));
+      }
+      return;
+    }
+    if (isMovies && grouping === 'genre') return;
+
     let items = [];
     if (activePlaylistId && window.electronDB) {
       try {
@@ -172,7 +273,7 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
     }
 
     setCategoryData(prev => ({ ...prev, [category]: items }));
-  }, [activePlaylistId, isMovies, categoryData, media]);
+  }, [activePlaylistId, isMovies, categoryData, media, grouping]);
 
   // Handle scrolling and focus — throttled to one state update per animation
   // frame instead of one per native scroll event, which on its own was
@@ -283,10 +384,36 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
             <h1 style={{ color: '#F5F5F7', fontSize: '2.4rem', margin: 0, fontWeight: 700, letterSpacing: '-0.02em' }}>
               {isMovies ? 'Movies' : 'TV Series'}
             </h1>
+
+            {isMovies && (
+              <div style={{ display: 'flex', gap: '6px', marginLeft: '22px', padding: '4px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                {[['provider', 'Categories'], ['az', 'A–Z'], ['genre', 'Genres']].map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    onClick={() => setGroupingPersist(mode)}
+                    style={{
+                      padding: '8px 18px', borderRadius: '9px', border: 'none', cursor: 'pointer',
+                      fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.01em',
+                      background: grouping === mode ? 'rgba(232,177,90,0.18)' : 'transparent',
+                      color: grouping === mode ? '#E8B15A' : '#A1A1AA',
+                      boxShadow: grouping === mode ? 'inset 0 0 0 1px rgba(232,177,90,0.35)' : 'none',
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {isMovies && grouping === 'genre' && genreProgress && genreProgress.done < genreProgress.total && (
+              <span style={{ marginLeft: '16px', color: '#A1A1AA', fontSize: '0.85rem' }}>
+                Building genre index… {Math.round((genreProgress.done / Math.max(1, genreProgress.total)) * 100)}%
+              </span>
+            )}
           </div>
         </div>
 
-        {categories.length === 0 && (
+        {categories.length === 0 && !(isMovies && grouping === 'genre' && genreProgress) && (
           <div style={{ padding: '20px 44px', color: '#A1A1AA', maxWidth: '640px' }}>
             <p style={{ fontSize: '1.2rem', margin: 0, color: '#F5F5F7', fontWeight: 600 }}>
               {isMovies ? 'No movies found in your sources.' : 'No series found in your sources.'}
@@ -317,10 +444,13 @@ export default function VODLibrary({ type = 'vod', onPlayStream }) {
                 <div style={{ display: 'flex', gap: '22px', overflowX: 'visible' }}>
                   {cards.map((card, colIndex) => {
                     // DB rows carry stream_icon/cover; adapter MediaItems carry
-                    // poster/logo; grouped shows carry .poster.
+                    // poster/logo; grouped shows carry .poster. Providers that
+                    // key entries by IMDb id get real artwork via metahub even
+                    // when the playlist itself ships none.
                     const posterUrl = isMovies
-                      ? (card.stream_icon || card.cover || card.poster || card.logo || null)
-                      : (card.poster || null);
+                      ? (card.stream_icon || card.cover || card.poster || card.logo
+                         || posterUrlFor(card.tvg_id || card.tvgId))
+                      : (card.poster || posterUrlFor(card.tvgId));
                     const itemName = isMovies ? (card.name || card.title || 'Untitled') : card.show;
                     const subtitle = isMovies ? null
                       : `${card.seasonNumbers.length} season${card.seasonNumbers.length === 1 ? '' : 's'}`;

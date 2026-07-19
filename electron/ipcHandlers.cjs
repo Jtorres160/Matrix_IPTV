@@ -771,6 +771,24 @@ function registerIPCHandlers(mainWindow) {
     }
   });
 
+  ipcMain.handle('db:getVODInitials', (_e, playlistId) => {
+    try {
+      return db.getVODInitials(playlistId);
+    } catch (err) {
+      console.error('[IPC] db:getVODInitials error:', err);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:getVODsByInitial', (_e, playlistId, letter, limit = 200, offset = 0) => {
+    try {
+      return db.getVODsByInitial(playlistId, letter, limit, offset);
+    } catch (err) {
+      console.error('[IPC] db:getVODsByInitial error:', err);
+      return [];
+    }
+  });
+
   ipcMain.handle('db:getVODCategories', (_e, playlistId) => {
     try {
       return db.getVODCategories(playlistId);
